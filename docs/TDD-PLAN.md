@@ -49,12 +49,12 @@
 
 ### Слой 4: Оркестрация графа и Роутинг
 *   **Test 4.1 (Routing Logic):** Функция `shouldContinue` должна возвращать `END`, если `errorScore < epsilon` или `status === 'failed'`.
-*   **Test 4.2 (Stop Policies):** Принудительная остановка по `maxIterations` и `maxTokenBudget`, включая перенос накопленного бюджета через `resume`.
+*   **Test 4.2 (Stop Policies):** Принудительная остановка по `maxIterations` и `maxTokenBudget`, включая перенос накопленного бюджета через `resume` в checkpoint-backed runtime.
 *   **Test 4.3 (Simulation Isolation):** Попытка вызова "опасного" инструмента в ветке симуляции должна выбрасывать исключение `SimulationSecurityError`.
 
 ### Слой 5: API, Реестр и HITL
 *   **Test 5.1 (Registry Binding):** Создание системы из чистого JSON-конфига и `RuntimeRegistry`. Проверка, что ссылки (`modelRef`) превратились в рабочие инстансы.
-*   **Test 5.2 (Interrupt/Resume):** Запуск графа, остановка на `interrupt`, ручной ввод `humanDecision`, возобновление. Проверка сохранения `runtime.k`.
+*   **Test 5.2 (Interrupt/Resume):** Запуск графа на `MemorySaver`, остановка на `interrupt`, ручной ввод `humanDecision`, возобновление. Проверка сохранения `runtime.k` и чтения состояния через `graph.getState(...)`.
 
 ---
 
@@ -66,7 +66,7 @@
 
 ### Phase Beta: "The Engine" (3-4 неделя)
 *   Реализация Слоя 3 и 4.
-*   **Результат:** Рабочий цикл LangGraph с ограниченной памятью и детерминированным Предиктором.
+*   **Результат:** Рабочий `StateGraph`-цикл LangGraph с ограниченной памятью, явным routing и checkpointer-backed lifecycle.
 
 ### Phase Gamma: "The Librarian" (5 неделя)
 *   Реализация Слоя 5 и 6 (Телеметрия).

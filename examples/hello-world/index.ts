@@ -18,24 +18,49 @@ async function main(): Promise<void> {
         compactionStrategy: "summarize-oldest",
         summaryReplacementSemantics: "replace-compacted-steps"
       },
-      observerRef: "increment-observer"
+      observerRef: "increment-observer",
+      verifierRef: "pause-once-verifier"
     },
     {
       observers: {
         "increment-observer": ({ current, target }) => ({
           value: Math.min(current.value + 2, target.value)
         })
+      },
+      verifiers: {
+        "pause-once-verifier": ({ current, history }) => {
+          if (current.value === 4 && history.length === 1) {
+            return {
+              status: "awaiting_human_intervention" as const,
+              stopReason: "manual-review"
+            };
+          }
+
+          return {
+            status: "optimizing" as const
+          };
+        }
       }
     }
   );
 
-  const snapshot = await system.invoke({
+  const interrupted = await system.invoke({
     target: { value: 5 },
     current: { value: 2 },
     metadata: {
       thread_id: "hello-world"
     }
   });
+  const snapshot =
+    interrupted.runtime.status === "awaiting_human_intervention"
+      ? await system.resume(interrupted, {
+          current: { value: 5 },
+          humanDecision: {
+            action: "resume",
+            approvedBy: "operator"
+          }
+        })
+      : interrupted;
 
   console.log(
     JSON.stringify(
@@ -43,7 +68,11 @@ async function main(): Promise<void> {
         status: snapshot.runtime.status,
         errorScore: snapshot.control.errorScore,
         checkpointId: snapshot.runtime.checkpointId,
-        iterations: snapshot.runtime.k + 1
+        bestCheckpointId: snapshot.runtime.bestCheckpointId,
+        iterations: snapshot.runtime.k + 1,
+        threadConfig: system.getThreadConfig({
+          threadId: "hello-world"
+        })
       },
       null,
       2

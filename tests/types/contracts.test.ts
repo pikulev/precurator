@@ -27,6 +27,9 @@ const system = compileControlSystem<TargetState, CurrentState>({
 
 expectTypeOf(system.config.stopPolicy.maxIterations).toEqualTypeOf<number>();
 expectTypeOf(system.abort).toBeFunction();
+expectTypeOf(system.graph.getState).toBeFunction();
+expectTypeOf(system.getState).toBeFunction();
+expectTypeOf(system.getThreadConfig).toBeFunction();
 
 const systemWithBudget = compileControlSystem<TargetState, CurrentState>({
   stopPolicy: {

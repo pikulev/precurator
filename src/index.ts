@@ -32,6 +32,7 @@ export type {
   ComparatorInput,
   ComparatorResult,
   CompiledControlSystem,
+  ControlThreadStateInput,
   ControlSystemConfig,
   InvokeInput,
   MemoryConfig,
@@ -52,4 +53,8 @@ export type {
   VerifierResult
 } from "./runtime/config";
 export { SimulationSecurityError } from "./runtime/errors";
+export {
+  resolveIterationOutcome,
+  shouldContinue
+} from "./runtime/routing";
 export { compileControlSystem } from "./runtime/compile";

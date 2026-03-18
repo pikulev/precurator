@@ -1,3 +1,4 @@
+import { MemorySaver } from "@langchain/langgraph";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -294,21 +295,36 @@ describe("compileControlSystem", () => {
   });
 
   it("supports interrupt, resume and abort with checkpoint semantics", async () => {
+    const checkpointer = new MemorySaver();
+    const verifier = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "awaiting_human_intervention" as const,
+        stopReason: "manual-review"
+      })
+      .mockResolvedValueOnce({
+        status: "optimizing" as const
+      });
     const system = compileControlSystem({
       stopPolicy: {
         epsilon: 0,
         maxIterations: 5
       },
-      observerRef: "increment-observer"
+      observerRef: "increment-observer",
+      verifierRef: "hitl-verifier"
     }, {
+      checkpointer,
       observers: {
         "increment-observer": ({ current, target }) => ({
           value: Math.min(current.value + 5, target.value)
         })
+      },
+      verifiers: {
+        "hitl-verifier": verifier
       }
     });
 
-    const started = await system.invoke({
+    const interrupted = await system.invoke({
       target: { value: 10 },
       current: { value: 0 },
       simulation: true,
@@ -316,9 +332,26 @@ describe("compileControlSystem", () => {
         thread_id: "hitl"
       }
     });
-    const interrupted = await system.interrupt(started, {
-      reason: "manual-review"
-    });
+    const persisted = await system.graph.getState(
+      system.getThreadConfig({
+        threadId: "hitl",
+        simulation: true
+      })
+    );
+    const checkpointState = await system.graph.getState(
+      system.getThreadConfig(
+        interrupted.runtime.checkpointId
+          ? {
+              threadId: "hitl",
+              simulation: true,
+              checkpointId: interrupted.runtime.checkpointId
+            }
+          : {
+              threadId: "hitl",
+              simulation: true
+            }
+      )
+    );
     const resumed = await system.resume(interrupted, {
       current: { value: 10 },
       humanDecision: {
@@ -330,14 +363,24 @@ describe("compileControlSystem", () => {
     });
 
     expect(interrupted.runtime.status).toBe("awaiting_human_intervention");
-    expect(interrupted.runtime.humanDecision).toEqual({ reason: "manual-review" });
-    expect(interrupted.runtime.checkpointId).toContain("awaiting_human_intervention");
+    expect(interrupted.runtime.stopReason).toBe("manual-review");
+    expect(interrupted.runtime.checkpointId).toBeTruthy();
+    expect((persisted.values as { runtime: { status: string } }).runtime.status).toBe(
+      "awaiting_human_intervention"
+    );
+    expect(
+      (
+        checkpointState.config.configurable as {
+          checkpoint_id?: string;
+        }
+      ).checkpoint_id
+    ).toBe(interrupted.runtime.checkpointId);
     expect(resumed.runtime.k).toBeGreaterThan(interrupted.runtime.k);
     expect(resumed.runtime.simulation).toBe(true);
-    expect(resumed.runtime.bestCheckpointId).toBe(resumed.runtime.checkpointId);
+    expect(resumed.runtime.bestCheckpointId).toBeTruthy();
     expect(aborted.runtime.status).toBe("aborted");
     expect(aborted.runtime.stopReason).toBe("abort");
-    expect(aborted.runtime.checkpointId).toContain("aborted");
+    expect(aborted.runtime.checkpointId).toBeTruthy();
   });
 
   it("fails when cumulative token budget exceeds maxTokenBudget", async () => {

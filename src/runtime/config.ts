@@ -1,3 +1,5 @@
+import type { RunnableConfig } from "@langchain/core/runnables";
+import type { BaseCheckpointSaver, CompiledStateGraph } from "@langchain/langgraph";
 import type { ZodType } from "zod";
 
 import type {
@@ -137,6 +139,13 @@ export interface RuntimeRegistry {
   verifiers?: Record<string, VerifierHandler<any, any>>;
   tools?: Record<string, ToolRegistration>;
   tokenBudgetEstimator?: TokenBudgetEstimator<any, any>;
+  checkpointer?: BaseCheckpointSaver;
+}
+
+export interface ControlThreadStateInput {
+  threadId: string;
+  simulation?: boolean;
+  checkpointId?: string;
 }
 
 export interface InvokeInput<TTarget, TCurrent> {
@@ -154,6 +163,11 @@ export interface ResumeInput<TCurrent> {
 
 export interface CompiledControlSystem<TTarget, TCurrent> {
   readonly config: Readonly<ControlSystemConfig<TTarget, TCurrent>>;
+  readonly graph: CompiledStateGraph<
+    ControlState<TTarget, TCurrent>,
+    Partial<ControlState<TTarget, TCurrent>>,
+    string
+  >;
   invoke(input: InvokeInput<TTarget, TCurrent>): Promise<ControlState<TTarget, TCurrent>>;
   interrupt(
     snapshot: ControlState<TTarget, TCurrent>,
@@ -167,4 +181,6 @@ export interface CompiledControlSystem<TTarget, TCurrent> {
     snapshot: ControlState<TTarget, TCurrent>,
     humanDecision?: Record<string, JsonValue>
   ): Promise<ControlState<TTarget, TCurrent>>;
+  getState(input: ControlThreadStateInput): Promise<ControlState<TTarget, TCurrent>>;
+  getThreadConfig(input: ControlThreadStateInput): RunnableConfig;
 }
