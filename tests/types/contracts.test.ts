@@ -28,10 +28,32 @@ const system = compileControlSystem<TargetState, CurrentState>({
 expectTypeOf(system.config.stopPolicy.maxIterations).toEqualTypeOf<number>();
 expectTypeOf(system.abort).toBeFunction();
 
+const systemWithBudget = compileControlSystem<TargetState, CurrentState>({
+  stopPolicy: {
+    epsilon: 0.05,
+    maxIterations: 3,
+    maxTokenBudget: 12
+  }
+}, {
+  tokenBudgetEstimator: ({ target, current, executionContext }) => {
+    const nextGoal: string = target.goal;
+    const currentGoal: string = current.goal;
+    const iteration: number = executionContext.k;
+
+    void nextGoal;
+    void currentGoal;
+    void iteration;
+    return 1;
+  }
+});
+
+expectTypeOf(systemWithBudget.config.stopPolicy.maxTokenBudget).toEqualTypeOf<number | undefined>();
+
 type Snapshot = ControlState<TargetState, CurrentState>;
 
 declare const snapshot: Snapshot;
 expectTypeOf(snapshot.runtime).toEqualTypeOf<RuntimeContext>();
+expectTypeOf(snapshot.runtime.tokenBudgetUsed).toEqualTypeOf<number | undefined>();
 expectTypeOf(snapshot.control.target).toEqualTypeOf<TargetState>();
 expectTypeOf(snapshot.control.current).toEqualTypeOf<CurrentState>();
 

@@ -36,7 +36,7 @@
 
 - [ ] Bounded memory. Реализована и задокументирована хотя бы одна стратегия компакции памяти; prompt-facing history не растет бесконечно.
 - [ ] Memory compaction contract. `shortTermMemory`, `summary` и trigger compaction оформлены как явный контракт, а не внутренняя эвристика.
-- [ ] Stop-loss guards. `epsilon`, `maxIterations` и `maxTokenBudget` срабатывают детерминированно и документированы как обязательные предохранители.
+- [ ] Stop-loss guards. `epsilon`, `maxIterations` и `maxTokenBudget` срабатывают детерминированно и документированы как обязательные предохранители; при budget guard snapshot прозрачно отражает `runtime.tokenBudgetUsed`.
 - [ ] Simulation mode isolation. При `simulation: true` destructive tools блокируются или переводятся в dry-run/mock, а `best_checkpoint_id` и боевой audit trail не загрязняются.
 - [ ] Error trend logic. Выявление `improving`, `flat`, `degrading`, `oscillating` определено как тестируемая логика, а не как неформальное впечатление LLM.
 - [ ] Human-in-the-loop semantics. `interrupt`, `resume`, `abort` и `humanDecision` формализованы и совместимы с checkpoint lifecycle.

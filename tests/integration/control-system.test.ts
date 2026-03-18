@@ -339,4 +339,141 @@ describe("compileControlSystem", () => {
     expect(aborted.runtime.stopReason).toBe("abort");
     expect(aborted.runtime.checkpointId).toContain("aborted");
   });
+
+  it("fails when cumulative token budget exceeds maxTokenBudget", async () => {
+    const system = compileControlSystem({
+      schemas: {
+        target: z.object({ value: z.number() }),
+        current: z.object({ value: z.number() })
+      },
+      stopPolicy: {
+        epsilon: 0,
+        maxIterations: 5,
+        maxTokenBudget: 5
+      },
+      observerRef: "increment-observer"
+    }, {
+      observers: {
+        "increment-observer": ({ current, target }) => ({
+          value: Math.min(current.value + 1, target.value)
+        })
+      },
+      tokenBudgetEstimator: () => 3
+    });
+
+    const snapshot = await system.invoke({
+      target: { value: 10 },
+      current: { value: 0 },
+      metadata: {
+        thread_id: "token-budget-fail"
+      }
+    });
+
+    expect(snapshot.runtime.status).toBe("failed");
+    expect(snapshot.runtime.stopReason).toBe("max-token-budget-reached");
+    expect(snapshot.runtime.k).toBe(1);
+    expect(snapshot.runtime.tokenBudgetUsed).toBe(6);
+    expect(snapshot.runtime.diagnostics).toEqual({
+      code: "max-token-budget-reached",
+      message: "Token budget exhausted.",
+      evidence: {
+        maxTokenBudget: 5,
+        tokenBudgetUsed: 6
+      }
+    });
+    expect(toBeSerializable(snapshot)).toBe(true);
+  });
+
+  it("treats maxTokenBudget as an inclusive boundary", async () => {
+    const system = compileControlSystem({
+      schemas: {
+        target: z.object({ value: z.number() }),
+        current: z.object({ value: z.number() })
+      },
+      stopPolicy: {
+        epsilon: 0,
+        maxIterations: 5,
+        maxTokenBudget: 6
+      },
+      observerRef: "increment-observer"
+    }, {
+      observers: {
+        "increment-observer": ({ current, target }) => ({
+          value: Math.min(current.value + 1, target.value)
+        })
+      },
+      tokenBudgetEstimator: () => 3
+    });
+
+    const snapshot = await system.invoke({
+      target: { value: 2 },
+      current: { value: 0 },
+      simulation: true,
+      metadata: {
+        thread_id: "token-budget-boundary"
+      }
+    });
+
+    expect(snapshot.runtime.status).toBe("converged");
+    expect(snapshot.runtime.stopReason).toBe("epsilon-reached");
+    expect(snapshot.runtime.tokenBudgetUsed).toBe(6);
+    expect(snapshot.runtime.simulation).toBe(true);
+    expect(toBeSerializable(snapshot)).toBe(true);
+  });
+
+  it("preserves consumed token budget across interrupt and resume", async () => {
+    const verifier = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "awaiting_human_intervention" as const,
+        stopReason: "manual-review"
+      })
+      .mockResolvedValueOnce({
+        status: "optimizing" as const
+      });
+    const system = compileControlSystem({
+      schemas: {
+        target: z.object({ value: z.number() }),
+        current: z.object({ value: z.number() })
+      },
+      stopPolicy: {
+        epsilon: 0,
+        maxIterations: 5,
+        maxTokenBudget: 5
+      },
+      observerRef: "increment-observer",
+      verifierRef: "hitl-verifier"
+    }, {
+      observers: {
+        "increment-observer": ({ current, target }) => ({
+          value: Math.min(current.value + 1, target.value)
+        })
+      },
+      verifiers: {
+        "hitl-verifier": verifier
+      },
+      tokenBudgetEstimator: () => 3
+    });
+
+    const interrupted = await system.invoke({
+      target: { value: 10 },
+      current: { value: 0 },
+      metadata: {
+        thread_id: "token-budget-resume"
+      }
+    });
+    const resumed = await system.resume(interrupted, {
+      humanDecision: {
+        action: "resume"
+      }
+    });
+
+    expect(interrupted.runtime.status).toBe("awaiting_human_intervention");
+    expect(interrupted.runtime.tokenBudgetUsed).toBe(3);
+    expect(resumed.runtime.status).toBe("failed");
+    expect(resumed.runtime.stopReason).toBe("max-token-budget-reached");
+    expect(resumed.runtime.k).toBe(1);
+    expect(resumed.runtime.tokenBudgetUsed).toBe(6);
+    expect(toBeSerializable(resumed)).toBe(true);
+  });
 });

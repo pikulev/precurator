@@ -49,7 +49,7 @@
 
 ### Слой 4: Оркестрация графа и Роутинг
 *   **Test 4.1 (Routing Logic):** Функция `shouldContinue` должна возвращать `END`, если `errorScore < epsilon` или `status === 'failed'`.
-*   **Test 4.2 (Stop Policies):** Принудительная остановка по `maxIterations`.
+*   **Test 4.2 (Stop Policies):** Принудительная остановка по `maxIterations` и `maxTokenBudget`, включая перенос накопленного бюджета через `resume`.
 *   **Test 4.3 (Simulation Isolation):** Попытка вызова "опасного" инструмента в ветке симуляции должна выбрасывать исключение `SimulationSecurityError`.
 
 ### Слой 5: API, Реестр и HITL

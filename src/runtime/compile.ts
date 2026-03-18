@@ -11,6 +11,8 @@ import type {
   ResumeInput,
   RuntimeExecutionContext,
   RuntimeRegistry,
+  TokenBudgetEstimator,
+  TokenBudgetEstimatorInput,
   ToolExecutionContext,
   ToolRegistration,
   VerifierHandler,
@@ -202,6 +204,50 @@ function defaultDiagnostics(
   };
 }
 
+function serializeBudgetPart(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function defaultTokenBudgetEstimator<TTarget, TCurrent>(
+  input: TokenBudgetEstimatorInput<TTarget, TCurrent>
+): number {
+  const serialized = [
+    input.target,
+    input.current,
+    input.worldContext,
+    input.metadata ?? null,
+    input.comparison,
+    input.verifierResult ?? null
+  ]
+    .map(serializeBudgetPart)
+    .join("");
+
+  return Math.max(1, Math.ceil(serialized.length / 4));
+}
+
+async function estimateTokenBudget<TTarget, TCurrent>(
+  registry: RuntimeRegistry,
+  input: TokenBudgetEstimatorInput<TTarget, TCurrent>
+): Promise<number> {
+  const estimator = registry.tokenBudgetEstimator as
+    | TokenBudgetEstimator<TTarget, TCurrent>
+    | undefined;
+  const estimated = estimator
+    ? await estimator(input)
+    : defaultTokenBudgetEstimator(input);
+  const normalized = Math.ceil(Number(estimated));
+
+  if (!Number.isFinite(normalized) || normalized < 0) {
+    throw new Error("Token budget estimator must return a finite non-negative number.");
+  }
+
+  return normalized;
+}
+
 function resolveIterationOutcome(
   verifierResult: VerifierResult | undefined,
   errorScore: number,
@@ -333,6 +379,7 @@ async function runControlLoop<TTarget, TCurrent>(
   let currentSummary = input.existingState?.control.shortTermMemory.summary;
   let memoryHistory = [...(input.existingState?.control.shortTermMemory.steps ?? [])];
   const errorHistory = extractErrorHistory(input.existingState);
+  let tokenBudgetUsed = input.existingState?.runtime.tokenBudgetUsed ?? 0;
 
   for (let iteration = input.startIteration; iteration < config.stopPolicy.maxIterations; iteration += 1) {
     const provisionalCheckpointId = createCheckpointId(input.auditLogRef, iteration, "optimizing");
@@ -382,15 +429,39 @@ async function runControlLoop<TTarget, TCurrent>(
         } satisfies VerifierInput<TTarget, TCurrent>)
       : undefined;
 
-    const outcome = resolveIterationOutcome(
-      verifierResult,
-      comparison.errorScore,
-      config.stopPolicy.epsilon,
-      comparison.errorTrend,
-      iteration,
-      config.stopPolicy.maxIterations,
-      nextErrorHistory
-    );
+    const iterationTokenBudget =
+      config.stopPolicy.maxTokenBudget === undefined
+        ? 0
+        : await estimateTokenBudget(registry, {
+            target: validatedTarget,
+            current: currentState,
+            worldContext: input.worldContext,
+            ...(input.metadata ? { metadata: input.metadata } : {}),
+            comparison,
+            ...(verifierResult ? { verifierResult } : {}),
+            executionContext
+          });
+    const nextTokenBudgetUsed = tokenBudgetUsed + iterationTokenBudget;
+    const outcome =
+      config.stopPolicy.maxTokenBudget !== undefined &&
+      nextTokenBudgetUsed > config.stopPolicy.maxTokenBudget
+        ? {
+            status: "failed" as const,
+            stopReason: "max-token-budget-reached",
+            diagnostics: defaultDiagnostics("max-token-budget-reached", "Token budget exhausted.", {
+              maxTokenBudget: config.stopPolicy.maxTokenBudget,
+              tokenBudgetUsed: nextTokenBudgetUsed
+            })
+          }
+        : resolveIterationOutcome(
+            verifierResult,
+            comparison.errorScore,
+            config.stopPolicy.epsilon,
+            comparison.errorTrend,
+            iteration,
+            config.stopPolicy.maxIterations,
+            nextErrorHistory
+          );
     const checkpointId = createCheckpointId(input.auditLogRef, iteration, outcome.status);
 
     if (comparison.errorScore <= bestErrorScore) {
@@ -425,6 +496,7 @@ async function runControlLoop<TTarget, TCurrent>(
     currentSummary = mergeSummary(currentSummary, compactedMemory.summary);
     memoryHistory = compactedMemory.steps;
     errorHistory.push(comparison.errorScore);
+    tokenBudgetUsed = nextTokenBudgetUsed;
 
     const snapshot: ControlState<TTarget, TCurrent> = {
       control: {
@@ -449,6 +521,7 @@ async function runControlLoop<TTarget, TCurrent>(
         auditLogRef: input.auditLogRef,
         checkpointId,
         ...(bestCheckpointId ? { bestCheckpointId } : {}),
+        ...(config.stopPolicy.maxTokenBudget !== undefined ? { tokenBudgetUsed } : {}),
         simulation: input.simulation,
         ...(input.metadata ? { metadata: input.metadata } : {}),
         ...(input.humanDecision ? { humanDecision: input.humanDecision } : {})

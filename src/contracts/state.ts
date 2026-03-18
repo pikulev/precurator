@@ -73,6 +73,7 @@ export interface RuntimeContext {
   auditLogRef?: string;
   checkpointId?: string;
   bestCheckpointId?: string;
+  tokenBudgetUsed?: number;
   simulation: boolean;
   metadata?: Record<string, JsonValue>;
   humanDecision?: Record<string, JsonValue>;

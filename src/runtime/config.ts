@@ -95,6 +95,20 @@ export type VerifierHandler<TTarget, TCurrent> = (
   input: VerifierInput<TTarget, TCurrent>
 ) => VerifierResult | Promise<VerifierResult>;
 
+export interface TokenBudgetEstimatorInput<TTarget, TCurrent> {
+  target: TTarget;
+  current: TCurrent;
+  worldContext: Record<string, unknown>;
+  metadata?: Record<string, JsonValue>;
+  comparison: ComparatorResult;
+  verifierResult?: VerifierResult;
+  executionContext: RuntimeExecutionContext;
+}
+
+export type TokenBudgetEstimator<TTarget, TCurrent> = (
+  input: TokenBudgetEstimatorInput<TTarget, TCurrent>
+) => number | Promise<number>;
+
 export interface StopPolicy {
   epsilon: number;
   maxIterations: number;
@@ -122,6 +136,7 @@ export interface RuntimeRegistry {
   observers?: Record<string, ObserverHandler<any, any>>;
   verifiers?: Record<string, VerifierHandler<any, any>>;
   tools?: Record<string, ToolRegistration>;
+  tokenBudgetEstimator?: TokenBudgetEstimator<any, any>;
 }
 
 export interface InvokeInput<TTarget, TCurrent> {

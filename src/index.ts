@@ -42,6 +42,8 @@ export type {
   RuntimeExecutionContext,
   SchemaContract,
   StopPolicy,
+  TokenBudgetEstimator,
+  TokenBudgetEstimatorInput,
   ToolExecutionContext,
   ToolInvocation,
   ToolRegistration,
