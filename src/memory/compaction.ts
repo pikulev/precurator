@@ -15,6 +15,17 @@ export type SummarizeCompactedSteps = (
   input: SummarizeCompactedStepsInput
 ) => string | Promise<string>;
 
+/**
+ * Deterministic default summarizer used when runtime does not provide one.
+ * Keeps outputs stable and checkpoint-safe.
+ */
+export const DefaultSummarizer: SummarizeCompactedSteps = async ({
+  compacted,
+  context
+}) => {
+  return formatFallbackSummary(compacted, context.auditLogRef);
+};
+
 function formatFallbackSummary(compacted: ControlStep[], auditLogRef?: string): string {
   if (compacted.length === 0) {
     return auditLogRef
@@ -39,7 +50,7 @@ function mergeMetadata(summary: string, compactedCount: number): Record<string, 
 export async function compactShortTermMemory(
   history: ControlStep[],
   context: CompactionContext,
-  summarizeCompactedSteps?: SummarizeCompactedSteps
+  summarizeCompactedSteps: SummarizeCompactedSteps = DefaultSummarizer
 ): Promise<ShortTermMemoryWindow> {
   const recentSteps =
     history.length > context.maxShortTermSteps
@@ -53,9 +64,7 @@ export async function compactShortTermMemory(
 
   let summary: string | undefined;
   if (compacted.length > 0 && context.strategy !== "sliding-window") {
-    summary = summarizeCompactedSteps
-      ? await summarizeCompactedSteps({ compacted, context })
-      : formatFallbackSummary(compacted, context.auditLogRef);
+    summary = await summarizeCompactedSteps({ compacted, context });
   }
 
   return {

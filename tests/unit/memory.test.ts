@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { compactShortTermMemory, createMemoryStep } from "../../src";
+import {
+  DefaultSummarizer,
+  compactShortTermMemory,
+  createMemoryStep
+} from "../../src";
 
 describe("compactShortTermMemory", () => {
   it("keeps the latest K steps for sliding-window", async () => {
@@ -40,6 +44,30 @@ describe("compactShortTermMemory", () => {
     expect(memory.steps).toHaveLength(1);
     expect(memory.summary).toContain("Compacted 2 step(s)");
     expect(memory.summary).toContain("audit-2");
+  });
+
+  it("DefaultSummarizer is deterministic and includes auditLogRef", async () => {
+    const history = [1, 2, 3].map((step) =>
+      createMemoryStep({
+        kind: "comparison",
+        message: `step-${step}`
+      })
+    );
+
+    const memory = await compactShortTermMemory(
+      history,
+      {
+        maxShortTermSteps: 1,
+        strategy: "summarize-oldest",
+        semantics: "replace-compacted-steps",
+        auditLogRef: "audit-default"
+      },
+      DefaultSummarizer
+    );
+
+    expect(memory.steps).toHaveLength(1);
+    expect(memory.summary).toContain("Compacted 2 step(s)");
+    expect(memory.summary).toContain("audit-default");
   });
 
   it("uses the external summarizer callback with audit continuity context", async () => {

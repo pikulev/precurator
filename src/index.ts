@@ -17,7 +17,8 @@ export type {
 } from "./contracts/state";
 export {
   compactShortTermMemory,
-  createMemoryStep
+  createMemoryStep,
+  DefaultSummarizer
 } from "./memory/compaction";
 export type {
   DeterministicComparatorInput,

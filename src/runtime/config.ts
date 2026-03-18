@@ -183,4 +183,38 @@ export interface CompiledControlSystem<TTarget, TCurrent> {
   ): Promise<ControlState<TTarget, TCurrent>>;
   getState(input: ControlThreadStateInput): Promise<ControlState<TTarget, TCurrent>>;
   getThreadConfig(input: ControlThreadStateInput): RunnableConfig;
+
+  /**
+   * Subscribe to library lifecycle telemetry.
+   *
+   * Note: listeners are closure-side effects and must not be stored in checkpointed state.
+   */
+  on<E extends PrecuratorTelemetryEventName>(
+    eventName: E,
+    listener: (payload: PrecuratorTelemetryEventPayloadMap[E]) => void
+  ): void;
+}
+
+export type PrecuratorTelemetryEventName = "step:completed" | "step:interrupted";
+
+export type TelemetryControlStepType = "Observation" | "Comparison" | "Prediction" | "Execution";
+
+export interface StepCompletedTelemetryPayload {
+  control_step_type: TelemetryControlStepType;
+  error_score: number;
+  delta_error: number;
+  error_trend: ErrorTrend;
+  simulation: boolean;
+  checkpoint_id: string;
+  thread_id?: string;
+}
+
+export interface StepInterruptedTelemetryPayload extends StepCompletedTelemetryPayload {
+  human_intervention_reason?: string;
+  stop_reason?: string;
+}
+
+export interface PrecuratorTelemetryEventPayloadMap {
+  "step:completed": StepCompletedTelemetryPayload;
+  "step:interrupted": StepInterruptedTelemetryPayload;
 }

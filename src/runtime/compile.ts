@@ -11,10 +11,16 @@ import { ZodError } from "zod";
 
 import type { ControlState, JsonValue } from "../contracts/state";
 import { deterministicComparator } from "../comparator/deterministic";
-import { compactShortTermMemory, createMemoryStep } from "../memory/compaction";
+import {
+  compactShortTermMemory,
+  createMemoryStep,
+  DefaultSummarizer
+} from "../memory/compaction";
 import type {
   CompiledControlSystem,
   ControlSystemConfig,
+  PrecuratorTelemetryEventName,
+  PrecuratorTelemetryEventPayloadMap,
   InvokeInput,
   MemoryConfig,
   ObserverHandler,
@@ -462,6 +468,62 @@ export function compileControlSystem<TTarget, TCurrent>(
   const checkpointer = runtimeRegistry.checkpointer ?? new MemorySaver();
   let generatedThreadSequence = 0;
 
+  const stepCompletedListeners = new Set<
+    (payload: PrecuratorTelemetryEventPayloadMap["step:completed"]) => void
+  >();
+  const stepInterruptedListeners = new Set<
+    (payload: PrecuratorTelemetryEventPayloadMap["step:interrupted"]) => void
+  >();
+
+  function emitTelemetry<E extends PrecuratorTelemetryEventName>(
+    eventName: E,
+    payload: PrecuratorTelemetryEventPayloadMap[E]
+  ): void {
+    if (eventName === "step:completed") {
+      for (const listener of stepCompletedListeners) {
+        try {
+          listener(payload as PrecuratorTelemetryEventPayloadMap["step:completed"]);
+        } catch {
+          // Telemetry must never break control flow.
+        }
+      }
+      return;
+    }
+
+    for (const listener of stepInterruptedListeners) {
+      try {
+        listener(payload as PrecuratorTelemetryEventPayloadMap["step:interrupted"]);
+      } catch {
+        // Telemetry must never break control flow.
+      }
+    }
+  }
+
+  function onTelemetry<E extends PrecuratorTelemetryEventName>(
+    eventName: E,
+    listener: (payload: PrecuratorTelemetryEventPayloadMap[E]) => void
+  ): void {
+    if (eventName === "step:completed") {
+      stepCompletedListeners.add(
+        listener as (payload: PrecuratorTelemetryEventPayloadMap["step:completed"]) => void
+      );
+      return;
+    }
+
+    stepInterruptedListeners.add(
+      listener as (payload: PrecuratorTelemetryEventPayloadMap["step:interrupted"]) => void
+    );
+  }
+
+  function getCheckpointId(
+    snapshot: ControlState<TTarget, TCurrent>,
+    kOverride?: number
+  ): string {
+    const k = kOverride ?? snapshot.runtime.k;
+    return snapshot.runtime.checkpointId ??
+      createExecutionCheckpointLabel(snapshot.runtime.auditLogRef, k);
+  }
+
   function ensureThreadMetadata(
     metadata: Record<string, JsonValue> | undefined,
     simulation: boolean
@@ -499,6 +561,7 @@ export function compileControlSystem<TTarget, TCurrent>(
       } satisfies ObserverInput<TTarget, TCurrent>);
 
       assertJsonReadySerializable(rawObservedCurrent, "observer.current");
+      const threadId = readThreadId(state.runtime.metadata);
 
       // "Тихая" деградация: если сенсор вернул данные, не проходящие схему,
       // мы фиксируем fault и завершаем цикл, не обновляя control.current.
@@ -521,6 +584,16 @@ export function compileControlSystem<TTarget, TCurrent>(
           };
         }
 
+        emitTelemetry("step:completed", {
+          control_step_type: "Observation",
+          error_score: state.control.errorScore,
+          delta_error: state.control.deltaError,
+          error_trend: state.control.errorTrend,
+          simulation: state.runtime.simulation,
+          checkpoint_id: getCheckpointId(state),
+          ...(threadId ? { thread_id: threadId } : {})
+        });
+
         return {
           control: {
             ...state.control,
@@ -528,6 +601,16 @@ export function compileControlSystem<TTarget, TCurrent>(
           }
         };
       }
+
+      emitTelemetry("step:completed", {
+        control_step_type: "Observation",
+        error_score: state.control.errorScore,
+        delta_error: state.control.deltaError,
+        error_trend: state.control.errorTrend,
+        simulation: state.runtime.simulation,
+        checkpoint_id: getCheckpointId(state),
+        ...(threadId ? { thread_id: threadId } : {})
+      });
 
       return {
         control: {
@@ -551,6 +634,17 @@ export function compileControlSystem<TTarget, TCurrent>(
             ...(previousErrorScore === undefined ? {} : { previousErrorScore }),
             errorHistory: previousErrorHistory.slice(0, -1)
           });
+
+      const threadId = readThreadId(state.runtime.metadata);
+      emitTelemetry("step:completed", {
+        control_step_type: "Comparison",
+        error_score: comparison.errorScore,
+        delta_error: comparison.deltaError,
+        error_trend: comparison.errorTrend,
+        simulation: state.runtime.simulation,
+        checkpoint_id: getCheckpointId(state, state.runtime.k + 1),
+        ...(threadId ? { thread_id: threadId } : {})
+      });
 
       return {
         control: {
@@ -631,6 +725,17 @@ export function compileControlSystem<TTarget, TCurrent>(
           : {})
       });
 
+      const threadId = readThreadId(state.runtime.metadata);
+      emitTelemetry("step:completed", {
+        control_step_type: "Execution",
+        error_score: state.control.errorScore,
+        delta_error: state.control.deltaError,
+        error_trend: state.control.errorTrend,
+        simulation: state.runtime.simulation,
+        checkpoint_id: getCheckpointId(state),
+        ...(threadId ? { thread_id: threadId } : {})
+      });
+
       return {
         runtime: {
           ...state.runtime,
@@ -668,7 +773,7 @@ export function compileControlSystem<TTarget, TCurrent>(
             ? { auditLogRef: state.runtime.auditLogRef }
             : {})
         },
-        runtimeRegistry.summarizeCompactedSteps
+        runtimeRegistry.summarizeCompactedSteps ?? DefaultSummarizer
       );
       const summary = mergeSummary(
         state.control.shortTermMemory.summary,
@@ -760,13 +865,35 @@ export function compileControlSystem<TTarget, TCurrent>(
     )
     .addEdge("compare", "verify")
     .addEdge("verify", "compactMemory")
-    .addConditionalEdges("compactMemory", (state: ControlState<TTarget, TCurrent>) =>
-      shouldContinue({
+    .addConditionalEdges("compactMemory", (state: ControlState<TTarget, TCurrent>) => {
+      const route = shouldContinue({
         status: state.runtime.status,
         errorScore: state.control.errorScore,
         epsilon: config.stopPolicy.epsilon
-      })
-    )
+      });
+
+      if (route === "interrupt") {
+        const threadId = readThreadId(state.runtime.metadata);
+        const stopReason = state.runtime.stopReason;
+        emitTelemetry("step:interrupted", {
+          control_step_type: "Execution",
+          error_score: state.control.errorScore,
+          delta_error: state.control.deltaError,
+          error_trend: state.control.errorTrend,
+          simulation: state.runtime.simulation,
+          checkpoint_id: getCheckpointId(state),
+          ...(threadId ? { thread_id: threadId } : {}),
+          ...(stopReason !== undefined
+            ? {
+                human_intervention_reason: stopReason,
+                stop_reason: stopReason
+              }
+            : {})
+        });
+      }
+
+      return route;
+    })
     .addConditionalEdges("interrupt", (state: ControlState<TTarget, TCurrent>) =>
       state.runtime.status === "aborted" ? END : "observe"
     )
@@ -790,6 +917,7 @@ export function compileControlSystem<TTarget, TCurrent>(
   return {
     config,
     graph,
+    on: onTelemetry,
     getThreadConfig(input) {
       return createThreadConfig(
         { thread_id: input.threadId },

@@ -31,6 +31,22 @@ expectTypeOf(system.abort).toBeFunction();
 expectTypeOf(system.graph.getState).toBeFunction();
 expectTypeOf(system.getState).toBeFunction();
 expectTypeOf(system.getThreadConfig).toBeFunction();
+expectTypeOf(system.on).toBeFunction();
+
+system.on("step:completed", (payload) => {
+  void payload.error_score;
+  void payload.delta_error;
+  void payload.error_trend;
+  void payload.simulation;
+  void payload.checkpoint_id;
+  void payload.thread_id;
+});
+
+system.on("step:interrupted", (payload) => {
+  void payload.human_intervention_reason;
+  void payload.stop_reason;
+  void payload.checkpoint_id;
+});
 
 const systemWithBudget = compileControlSystem<TargetState, CurrentState>({
   stopPolicy: {
@@ -55,7 +71,13 @@ expectTypeOf(systemWithBudget.config.stopPolicy.maxTokenBudget).toEqualTypeOf<nu
 
 type Snapshot = ControlState<TargetState, CurrentState>;
 
-declare const snapshot: Snapshot;
+const snapshot = {
+  runtime: {} as RuntimeContext,
+  control: {
+    target: {} as TargetState,
+    current: {} as CurrentState
+  }
+} as unknown as Snapshot;
 expectTypeOf(snapshot.runtime).toEqualTypeOf<RuntimeContext>();
 expectTypeOf(snapshot.runtime.tokenBudgetUsed).toEqualTypeOf<number | undefined>();
 expectTypeOf(snapshot.control.target).toEqualTypeOf<TargetState>();
@@ -64,10 +86,20 @@ expectTypeOf(snapshot.control.current).toEqualTypeOf<CurrentState>();
 type Observer = ObserverHandler<TargetState, CurrentState>;
 type Verifier = VerifierHandler<TargetState, CurrentState>;
 
-declare const executionContext: RuntimeExecutionContext;
-declare const observer: Observer;
-declare const verifier: Verifier;
-declare const tool: ToolRegistration;
+const executionContext = {
+  simulation: false,
+  readOnly: true,
+  k: 0,
+  invokeTool: async () => undefined
+} as unknown as RuntimeExecutionContext;
+
+const observer = (async () => ({ goal: "noop" } as CurrentState)) as unknown as Observer;
+
+const verifier = (async () => ({ status: "optimizing" as const })) as unknown as Verifier;
+
+const tool = {
+  execute: async () => undefined
+} as unknown as ToolRegistration;
 
 expectTypeOf(executionContext.invokeTool).toBeCallableWith("tool-ref", {
   dryRun: true

@@ -77,7 +77,7 @@ describe("compileControlSystem", () => {
       }
     });
 
-    await expect(() =>
+    await expect(
       system.invoke({
         target: { value: "not-a-number" } as any,
         current: { value: 0 }
@@ -175,7 +175,7 @@ describe("compileControlSystem", () => {
       }
     });
 
-    await expect(() =>
+    await expect(
       system.invoke({
         target: { value: 1 },
         current: { value: 0 }
@@ -400,7 +400,7 @@ describe("compileControlSystem", () => {
       }
     });
 
-    await expect(() =>
+    await expect(
       system.invoke({
         target: { value: 1 },
         current: { value: 0 },

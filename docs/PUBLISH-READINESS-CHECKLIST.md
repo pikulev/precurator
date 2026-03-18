@@ -26,7 +26,7 @@
 
 - [ ] Совместимость с checkpointers. Состояние корректно сохраняется и восстанавливается через `SqliteSaver`, `PostgresSaver` или эквивалентный checkpointer backend.
 - [ ] Поддержка interrupts. `interrupt`/`Command({ resume })` и ergonomic-методы `resume`/`abort` не теряют `runtime.k`, `checkpoint_id` и контекст управления.
-- [ ] Интеграция с LangSmith. Внутренние шаги размечаются тегами и metadata: как минимум `control_step_type`, `error_score`, `delta_error`, `error_trend`, `simulation`, `checkpoint_id`.
+- [x] Интеграция с LangSmith. Внутренние шаги размечаются тегами и metadata: как минимум `control_step_type`, `error_score`, `delta_error`, `error_trend`, `simulation`, `checkpoint_id`.
 - [ ] Peer dependencies. `langgraph` и `@langchain/core` вынесены в `peerDependencies`, чтобы не форсировать конфликтующие копии пакетов.
 - [ ] Studio-friendly compiled graph. `compileControlSystem(config)` отдает объект с `graph`/`getState`, который можно инспектировать и визуализировать в LangGraph Studio без ручной пересборки hidden runtime-слоев.
 
@@ -48,7 +48,7 @@
 - [ ] Чистая установка. `npm install precurator` не тянет неявные тяжелые зависимости, не обязательные для core-runtime.
 - [ ] One-minute guide. Есть минимальный "Hello World" сценарий, который показывает `compileControlSystem(config)`, `thread_id` и базовый invoke/resume-path без сложного доменного окружения.
 - [ ] API reference. Документированы `ControlBasis`, `RuntimeContext`, `ControlSystemConfig`, runtime registry contracts и invariants bounded memory.
-- [ ] Набор пресетов. Есть хотя бы `deterministicComparator` как baseline `Comparator` и `DefaultSummarizer`, пригодные для старта без полной кастомной реализации.
+- [x] Набор пресетов. Есть хотя бы `deterministicComparator` как baseline `Comparator` и `DefaultSummarizer`, пригодные для старта без полной кастомной реализации.
 - [ ] Dual package support. Пакет собран в ESM и CommonJS-совместимом формате, если целевая аудитория включает смешанные Node.js-окружения.
 
 ## 5. Testing & Quality

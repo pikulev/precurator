@@ -7,3 +7,6 @@ const cjsModule = require("../../dist/index.cjs");
 
 assert.equal(typeof esmModule.compileControlSystem, "function");
 assert.equal(typeof cjsModule.compileControlSystem, "function");
+
+assert.equal(typeof esmModule.DefaultSummarizer, "function");
+assert.equal(typeof cjsModule.DefaultSummarizer, "function");
