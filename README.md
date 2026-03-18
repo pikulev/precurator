@@ -45,6 +45,24 @@ const snapshot = await system.invoke({
 
 The canonical entrypoint is `compileControlSystem(config)`. Runtime instances should stay outside config/state and be resolved through external registries.
 
+## Deterministic Presets
+
+For early TDD cycles and synthetic control tests, the package also exports deterministic helpers:
+
+```ts
+import { deriveErrorTrend, deterministicComparator } from "precurator";
+
+const comparison = deterministicComparator({
+  target: { value: 10 },
+  current: { value: 7 },
+  previousErrorScore: 0.5
+});
+
+const trend = deriveErrorTrend([0.5, 0.3, 0.4]);
+```
+
+This preset keeps `errorScore` normalized to `[0, 1]` for structured data and makes trend/oscillation logic testable without a live model.
+
 ## Development
 
 ```bash

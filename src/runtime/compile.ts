@@ -1,8 +1,7 @@
 import type { ControlState, JsonValue } from "../contracts/state";
+import { deterministicComparator } from "../comparator/deterministic";
 import { compactShortTermMemory, createMemoryStep } from "../memory/compaction";
 import type {
-  ComparatorInput,
-  ComparatorResult,
   CompiledControlSystem,
   ControlSystemConfig,
   InvokeInput,
@@ -16,45 +15,6 @@ const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
   compactionStrategy: "sliding-window",
   summaryReplacementSemantics: "replace-compacted-steps"
 };
-
-function stableJson(value: unknown): string {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stableJson(item)).join(",")}]`;
-  }
-
-  const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
-    left.localeCompare(right)
-  );
-
-  return `{${entries
-    .map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`)
-    .join(",")}}`;
-}
-
-function defaultComparator<TTarget, TCurrent>(
-  input: ComparatorInput<TTarget, TCurrent>
-): ComparatorResult {
-  const targetJson = stableJson(input.target);
-  const currentJson = stableJson(input.current);
-  const matches = targetJson === currentJson;
-  const errorScore = matches ? 0 : 1;
-  const previous = input.previousErrorScore ?? 1;
-  const deltaError = errorScore - previous;
-
-  return {
-    errorVector: {
-      equalityMismatch: !matches
-    },
-    errorScore,
-    deltaError,
-    errorTrend: deltaError < 0 ? "improving" : deltaError > 0 ? "degrading" : "flat",
-    ...(matches ? { prediction: "State already matches target." } : {})
-  };
-}
 
 function normalizeMetadata(
   configMetadata?: Record<string, JsonValue>,
@@ -86,7 +46,7 @@ async function buildState<TTarget, TCurrent>(
   const validatedCurrent = config.schemas?.current
     ? config.schemas.current.parse(input.current)
     : input.current;
-  const comparator = config.comparator ?? defaultComparator<TTarget, TCurrent>;
+  const comparator = config.comparator ?? deterministicComparator<TTarget, TCurrent>;
   const comparison = await comparator({
     target: validatedTarget,
     current: validatedCurrent,

@@ -20,6 +20,15 @@ export {
   createMemoryStep
 } from "./memory/compaction";
 export type {
+  DeterministicComparatorInput,
+  ErrorTrendOptions
+} from "./comparator/deterministic";
+export {
+  compareStructuredValues,
+  deriveErrorTrend,
+  deterministicComparator
+} from "./comparator/deterministic";
+export type {
   ComparatorInput,
   ComparatorResult,
   CompiledControlSystem,

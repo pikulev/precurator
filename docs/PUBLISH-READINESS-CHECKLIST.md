@@ -48,7 +48,7 @@
 - [ ] Чистая установка. `npm install precurator` не тянет неявные тяжелые зависимости, не обязательные для core-runtime.
 - [ ] One-minute guide. Есть минимальный "Hello World" сценарий, который показывает `compileControlSystem(config)` и базовый invoke-path без сложного доменного окружения.
 - [ ] API reference. Документированы `ControlBasis`, `RuntimeContext`, `ControlSystemConfig`, runtime registry contracts и invariants bounded memory.
-- [ ] Набор пресетов. Есть хотя бы `DefaultComparator` и `DefaultSummarizer`, пригодные для старта без полной кастомной реализации.
+- [ ] Набор пресетов. Есть хотя бы `deterministicComparator` как baseline `Comparator` и `DefaultSummarizer`, пригодные для старта без полной кастомной реализации.
 - [ ] Dual package support. Пакет собран в ESM и CommonJS-совместимом формате, если целевая аудитория включает смешанные Node.js-окружения.
 
 ## 5. Testing & Quality
