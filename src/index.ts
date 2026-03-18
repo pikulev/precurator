@@ -35,9 +35,19 @@ export type {
   ControlSystemConfig,
   InvokeInput,
   MemoryConfig,
+  ObserverHandler,
+  ObserverInput,
   ResumeInput,
   RuntimeRegistry,
+  RuntimeExecutionContext,
   SchemaContract,
-  StopPolicy
+  StopPolicy,
+  ToolExecutionContext,
+  ToolInvocation,
+  ToolRegistration,
+  VerifierHandler,
+  VerifierInput,
+  VerifierResult
 } from "./runtime/config";
+export { SimulationSecurityError } from "./runtime/errors";
 export { compileControlSystem } from "./runtime/compile";

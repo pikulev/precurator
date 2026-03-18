@@ -3,21 +3,31 @@ import { z } from "zod";
 import { compileControlSystem } from "../../src";
 
 async function main(): Promise<void> {
-  const system = compileControlSystem({
-    schemas: {
-      target: z.object({ value: z.number() }),
-      current: z.object({ value: z.number() })
+  const system = compileControlSystem(
+    {
+      schemas: {
+        target: z.object({ value: z.number() }),
+        current: z.object({ value: z.number() })
+      },
+      stopPolicy: {
+        epsilon: 0.05,
+        maxIterations: 3
+      },
+      memory: {
+        maxShortTermSteps: 4,
+        compactionStrategy: "summarize-oldest",
+        summaryReplacementSemantics: "replace-compacted-steps"
+      },
+      observerRef: "increment-observer"
     },
-    stopPolicy: {
-      epsilon: 0.05,
-      maxIterations: 3
-    },
-    memory: {
-      maxShortTermSteps: 4,
-      compactionStrategy: "summarize-oldest",
-      summaryReplacementSemantics: "replace-compacted-steps"
+    {
+      observers: {
+        "increment-observer": ({ current, target }) => ({
+          value: Math.min(current.value + 2, target.value)
+        })
+      }
     }
-  });
+  );
 
   const snapshot = await system.invoke({
     target: { value: 5 },
@@ -32,7 +42,8 @@ async function main(): Promise<void> {
       {
         status: snapshot.runtime.status,
         errorScore: snapshot.control.errorScore,
-        checkpointId: snapshot.runtime.checkpointId
+        checkpointId: snapshot.runtime.checkpointId,
+        iterations: snapshot.runtime.k + 1
       },
       null,
       2

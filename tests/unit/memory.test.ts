@@ -41,4 +41,36 @@ describe("compactShortTermMemory", () => {
     expect(memory.summary).toContain("Compacted 2 step(s)");
     expect(memory.summary).toContain("audit-2");
   });
+
+  it("uses the external summarizer callback with audit continuity context", async () => {
+    const history = [1, 2, 3].map((step) =>
+      createMemoryStep({
+        kind: "comparison",
+        message: `step-${step}`
+      })
+    );
+    const summarizeCompactedSteps = async ({
+      compacted,
+      context
+    }: {
+      compacted: typeof history;
+      context: {
+        auditLogRef?: string;
+      };
+    }) => `summary:${compacted.length}:${context.auditLogRef}`;
+
+    const memory = await compactShortTermMemory(
+      history,
+      {
+        maxShortTermSteps: 1,
+        strategy: "hybrid",
+        semantics: "replace-all-but-recent-window",
+        auditLogRef: "audit-3"
+      },
+      summarizeCompactedSteps
+    );
+
+    expect(memory.summary).toBe("summary:2:audit-3");
+    expect(memory.steps[0]?.message).toBe("step-3");
+  });
 });
