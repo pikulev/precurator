@@ -1,0 +1,12 @@
+---
+description: TypeScript library conventions for precurator
+globs: **/*.ts
+alwaysApply: false
+---
+
+# TypeScript Library Conventions
+
+- Keep public contracts strict and generic-safe; do not leak `any` through exported APIs.
+- Preserve dual-package exports and declaration output when changing build or entrypoints.
+- Externalize `@langchain/core`, `@langchain/langgraph`, and `zod` from the bundle.
+- Prefer small deterministic helpers and explicit validation over implicit runtime behavior.

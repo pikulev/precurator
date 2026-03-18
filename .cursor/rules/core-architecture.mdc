@@ -1,0 +1,12 @@
+---
+description: Core architectural invariants for precurator
+alwaysApply: true
+---
+
+# Core Architecture
+
+- Treat `docs/ADR/ADR-001.md`, `docs/ADR/ADR-002.md`, and `docs/ADR/ADR-003.md` as the source of truth.
+- Keep `ControlSystemConfig` JSON-ready and resolve runtime instances through registries.
+- Preserve the `control` / `runtime` split; never move domain truth into runtime metadata.
+- Keep checkpointed state serializable and bounded-memory aware.
+- Forbid destructive side effects when `simulation` is true.

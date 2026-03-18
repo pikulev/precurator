@@ -1,0 +1,11 @@
+---
+description: Keep docs synchronized with architecture changes
+globs: docs/**/*.md
+alwaysApply: false
+---
+
+# Documentation Sync
+
+- Keep ADRs, the publish checklist, and the TDD plan aligned with code-level contract changes.
+- Prefer updating the authoritative document instead of duplicating architecture guidance elsewhere.
+- If a public invariant changes, reflect that change in tests and release-facing docs.
