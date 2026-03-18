@@ -1,7 +1,7 @@
 import { END } from "@langchain/langgraph";
 import { describe, expect, it } from "vitest";
 
-import { shouldContinue } from "../../src";
+import { resolveIterationOutcome, shouldContinue } from "../../src";
 
 describe("shouldContinue", () => {
   it("returns END when epsilon is reached", () => {
@@ -42,5 +42,25 @@ describe("shouldContinue", () => {
         epsilon: 0.05
       })
     ).toBe("observe");
+  });
+});
+
+describe("resolveIterationOutcome", () => {
+  it("marks a non-improving error sequence as stuck (no-progress)", () => {
+    const outcome = resolveIterationOutcome({
+      errorScore: 0.4,
+      epsilon: 0.05,
+      errorTrend: "improving",
+      iteration: 1,
+      maxIterations: 5,
+      errorHistory: [0.2, 0.3, 0.4]
+    });
+
+    expect(outcome.status).toBe("stuck");
+    expect(outcome.stopReason).toBe("no-progress");
+    expect(outcome.diagnostics?.code).toBe("no-progress");
+    expect(outcome.diagnostics?.evidence).toMatchObject({
+      recentHistory: [0.2, 0.3, 0.4]
+    });
   });
 });

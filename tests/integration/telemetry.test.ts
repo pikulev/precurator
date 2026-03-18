@@ -29,7 +29,7 @@ describe("telemetry events", () => {
     );
 
     system.on("step:completed", (payload) => {
-      completed.push(payload as Record<string, unknown>);
+      completed.push(payload as unknown as Record<string, unknown>);
     });
 
     const snapshot = await system.invoke({
@@ -64,7 +64,7 @@ describe("telemetry events", () => {
       stopReason: "manual-review"
     });
 
-    const system = compileControlSystem(
+    const system = compileControlSystem<{ value: number }, { value: number }>(
       {
         stopPolicy: {
           epsilon: 0,
@@ -86,7 +86,7 @@ describe("telemetry events", () => {
     );
 
     system.on("step:interrupted", (payload) => {
-      interrupted.push(payload as Record<string, unknown>);
+      interrupted.push(payload as unknown as Record<string, unknown>);
     });
 
     const snapshot = await system.invoke({
@@ -99,7 +99,7 @@ describe("telemetry events", () => {
     expect(snapshot.runtime.status).toBe("awaiting_human_intervention");
     expect(interrupted).toHaveLength(1);
 
-    const payload = interrupted[0];
+    const payload = interrupted[0]!;
     expect(payload.control_step_type).toBe("Execution");
     expect(payload.human_intervention_reason).toBe("manual-review");
     expect(payload.stop_reason).toBe("manual-review");

@@ -100,10 +100,11 @@ describe("compileControlSystem", () => {
       observerRef: "bad-observer"
     }, {
       observers: {
+        // Intentionally returns invalid shape to assert runtime schema violation behavior.
         "bad-observer": () => ({
           value: "not-a-number",
           leaked: { reason: "sensor-broke" }
-        })
+        }) as any
       }
     });
 
@@ -195,17 +196,7 @@ describe("compileControlSystem", () => {
         maxIterations: 5
       },
       observerRef: "oscillating-observer",
-      comparator: ({ current, previousErrorScore }) => {
-        return {
-          errorVector: { score: current.errorScore },
-          errorScore: current.errorScore,
-          deltaError:
-            previousErrorScore === undefined
-              ? current.errorScore
-              : Number((current.errorScore - previousErrorScore).toFixed(6)),
-          errorTrend: deriveErrorTrend(current.history)
-        };
-      }
+      comparatorRef: "oscillating-comparator"
     }, {
       observers: {
         "oscillating-observer": ({ current }) => {
@@ -214,6 +205,19 @@ describe("compileControlSystem", () => {
           return {
             history: [...current.history, nextErrorScore],
             errorScore: nextErrorScore
+          };
+        }
+      },
+      comparators: {
+        "oscillating-comparator": ({ current, previousErrorScore }) => {
+          return {
+            errorVector: { score: current.errorScore },
+            errorScore: current.errorScore,
+            deltaError:
+              previousErrorScore === undefined
+                ? current.errorScore
+                : Number((current.errorScore - previousErrorScore).toFixed(6)),
+            errorTrend: deriveErrorTrend(current.history)
           };
         }
       }
@@ -326,23 +330,7 @@ describe("compileControlSystem", () => {
         epsilon: 0,
         maxIterations: 5
       },
-      comparator: ({ target, current, previousErrorScore }) => {
-        const errorScore = Number((Math.abs(target.value - current.value) / target.value).toFixed(6));
-        return {
-          errorVector: {
-            value: errorScore
-          },
-          errorScore,
-          deltaError:
-            previousErrorScore === undefined
-              ? errorScore
-              : Number((errorScore - previousErrorScore).toFixed(6)),
-          errorTrend: deriveErrorTrend([
-            ...(previousErrorScore === undefined ? [] : [previousErrorScore]),
-            errorScore
-          ])
-        };
-      },
+      comparatorRef: "abs-diff-comparator",
       memory: {
         maxShortTermSteps: 2,
         compactionStrategy: "summarize-oldest",
@@ -354,6 +342,25 @@ describe("compileControlSystem", () => {
         "increment-observer": ({ current, target }) => ({
           value: Math.min(current.value + 1, target.value)
         })
+      },
+      comparators: {
+        "abs-diff-comparator": ({ target, current, previousErrorScore }) => {
+          const errorScore = Number((Math.abs(target.value - current.value) / target.value).toFixed(6));
+          return {
+            errorVector: {
+              value: errorScore
+            },
+            errorScore,
+            deltaError:
+              previousErrorScore === undefined
+                ? errorScore
+                : Number((errorScore - previousErrorScore).toFixed(6)),
+            errorTrend: deriveErrorTrend([
+              ...(previousErrorScore === undefined ? [] : [previousErrorScore]),
+              errorScore
+            ])
+          };
+        }
       },
       summarizeCompactedSteps
     });
@@ -425,7 +432,7 @@ describe("compileControlSystem", () => {
       .mockResolvedValueOnce({
         status: "optimizing" as const
       });
-    const system = compileControlSystem({
+    const system = compileControlSystem<{ value: number }, { value: number }>({
       stopPolicy: {
         epsilon: 0,
         maxIterations: 5

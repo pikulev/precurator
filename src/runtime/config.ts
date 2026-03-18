@@ -28,6 +28,10 @@ export interface ComparatorResult {
   prediction?: string;
 }
 
+export type ComparatorHandler<TTarget, TCurrent> = (
+  input: ComparatorInput<TTarget, TCurrent>
+) => ComparatorResult | Promise<ComparatorResult>;
+
 export interface SchemaContract<TTarget, TCurrent> {
   target?: ZodType<TTarget>;
   current?: ZodType<TCurrent>;
@@ -127,18 +131,22 @@ export interface ControlSystemConfig<TTarget, TCurrent> {
   verifierRef?: string;
   toolRefs?: string[];
   metadata?: Record<string, JsonValue>;
-  comparator?: (
-    input: ComparatorInput<TTarget, TCurrent>
-  ) => ComparatorResult | Promise<ComparatorResult>;
+  /**
+   * Canonical extension point for non-default comparator logic.
+   *
+   * Keeping it as a reference makes `ControlSystemConfig` JSON-ready.
+   */
+  comparatorRef?: string;
 }
 
-export interface RuntimeRegistry {
+export interface RuntimeRegistry<TTarget = unknown, TCurrent = unknown> {
   summarizeCompactedSteps?: SummarizeCompactedSteps;
   models?: Record<string, unknown>;
-  observers?: Record<string, ObserverHandler<any, any>>;
-  verifiers?: Record<string, VerifierHandler<any, any>>;
+  observers?: Record<string, ObserverHandler<TTarget, TCurrent>>;
+  verifiers?: Record<string, VerifierHandler<TTarget, TCurrent>>;
+  comparators?: Record<string, ComparatorHandler<TTarget, TCurrent>>;
   tools?: Record<string, ToolRegistration>;
-  tokenBudgetEstimator?: TokenBudgetEstimator<any, any>;
+  tokenBudgetEstimator?: TokenBudgetEstimator<TTarget, TCurrent>;
   checkpointer?: BaseCheckpointSaver;
 }
 

@@ -19,6 +19,7 @@ import {
 import type {
   CompiledControlSystem,
   ControlSystemConfig,
+  ComparatorHandler,
   PrecuratorTelemetryEventName,
   PrecuratorTelemetryEventPayloadMap,
   InvokeInput,
@@ -42,6 +43,10 @@ import {
   shouldContinue
 } from "./routing";
 import { assertJsonReadySerializable } from "./serializability";
+import {
+  assertComparatorResultShape,
+  assertVerifierResultShape
+} from "./validators";
 
 const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
   maxShortTermSteps: 8,
@@ -93,7 +98,7 @@ function createExecutionCheckpointLabel(
 
 function resolveObserver<TTarget, TCurrent>(
   config: ControlSystemConfig<TTarget, TCurrent>,
-  registry: RuntimeRegistry
+  registry: RuntimeRegistry<TTarget, TCurrent>
 ): ObserverHandler<TTarget, TCurrent> | undefined {
   if (!config.observerRef) {
     return undefined;
@@ -111,7 +116,7 @@ function resolveObserver<TTarget, TCurrent>(
 
 function resolveVerifier<TTarget, TCurrent>(
   config: ControlSystemConfig<TTarget, TCurrent>,
-  registry: RuntimeRegistry
+  registry: RuntimeRegistry<TTarget, TCurrent>
 ): VerifierHandler<TTarget, TCurrent> | undefined {
   if (!config.verifierRef) {
     return undefined;
@@ -127,9 +132,27 @@ function resolveVerifier<TTarget, TCurrent>(
   return verifier;
 }
 
+function resolveComparator<TTarget, TCurrent>(
+  config: ControlSystemConfig<TTarget, TCurrent>,
+  registry: RuntimeRegistry<TTarget, TCurrent>
+): ComparatorHandler<TTarget, TCurrent> | undefined {
+  if (!config.comparatorRef) {
+    return undefined;
+  }
+
+  const comparator = registry.comparators?.[config.comparatorRef] as
+    | ComparatorHandler<TTarget, TCurrent>
+    | undefined;
+  if (!comparator) {
+    throw new Error(`Comparator "${config.comparatorRef}" is not registered.`);
+  }
+
+  return comparator;
+}
+
 function resolveModel<TTarget, TCurrent>(
   config: ControlSystemConfig<TTarget, TCurrent>,
-  registry: RuntimeRegistry
+  registry: RuntimeRegistry<TTarget, TCurrent>
 ): unknown {
   if (!config.modelRef) {
     return undefined;
@@ -145,7 +168,7 @@ function resolveModel<TTarget, TCurrent>(
 
 function resolveTool<TTarget, TCurrent>(
   config: ControlSystemConfig<TTarget, TCurrent>,
-  registry: RuntimeRegistry,
+  registry: RuntimeRegistry<TTarget, TCurrent>,
   toolRef: string
 ): ToolRegistration {
   if (config.toolRefs && !config.toolRefs.includes(toolRef)) {
@@ -162,7 +185,7 @@ function resolveTool<TTarget, TCurrent>(
 
 function createToolInvoker<TTarget, TCurrent>(
   config: ControlSystemConfig<TTarget, TCurrent>,
-  registry: RuntimeRegistry,
+  registry: RuntimeRegistry<TTarget, TCurrent>,
   context: ToolExecutionContext
 ): RuntimeExecutionContext["invokeTool"] {
   return async (toolRef, input) => {
@@ -195,7 +218,7 @@ function createToolInvoker<TTarget, TCurrent>(
 
 function createExecutionContext<TTarget, TCurrent>(
   config: ControlSystemConfig<TTarget, TCurrent>,
-  registry: RuntimeRegistry,
+  registry: RuntimeRegistry<TTarget, TCurrent>,
   snapshot: ControlState<TTarget, TCurrent>
 ): RuntimeExecutionContext {
   const traceId = readTraceId(snapshot.runtime.metadata);
@@ -247,7 +270,7 @@ function defaultTokenBudgetEstimator<TTarget, TCurrent>(
 }
 
 async function estimateTokenBudget<TTarget, TCurrent>(
-  registry: RuntimeRegistry,
+  registry: RuntimeRegistry<TTarget, TCurrent>,
   input: TokenBudgetEstimatorInput<TTarget, TCurrent>
 ): Promise<number> {
   const estimator = registry.tokenBudgetEstimator as
@@ -457,10 +480,11 @@ async function loadThreadState<TTarget, TCurrent>(
 
 export function compileControlSystem<TTarget, TCurrent>(
   config: ControlSystemConfig<TTarget, TCurrent>,
-  runtimeRegistry: RuntimeRegistry = {}
+  runtimeRegistry: RuntimeRegistry<TTarget, TCurrent> = {}
 ): CompiledControlSystem<TTarget, TCurrent> {
   const observer = resolveObserver(config, runtimeRegistry);
   const verifier = resolveVerifier(config, runtimeRegistry);
+  const comparator = resolveComparator(config, runtimeRegistry);
   const memoryConfig = {
     ...DEFAULT_MEMORY_CONFIG,
     ...(config.memory ?? {})
@@ -584,6 +608,8 @@ export function compileControlSystem<TTarget, TCurrent>(
           };
         }
 
+        assertJsonReadySerializable(parsed.data, "observer.current.parsed");
+
         emitTelemetry("step:completed", {
           control_step_type: "Observation",
           error_score: state.control.errorScore,
@@ -622,8 +648,8 @@ export function compileControlSystem<TTarget, TCurrent>(
     .addNode("compare", async (state: ControlState<TTarget, TCurrent>) => {
       const previousErrorHistory = extractErrorHistory(state);
       const previousErrorScore = previousErrorHistory[previousErrorHistory.length - 1];
-      const comparison = config.comparator
-        ? await config.comparator({
+      const comparison = comparator
+        ? await comparator({
             target: state.control.target,
             current: state.control.current,
             ...(previousErrorScore === undefined ? {} : { previousErrorScore })
@@ -634,6 +660,8 @@ export function compileControlSystem<TTarget, TCurrent>(
             ...(previousErrorScore === undefined ? {} : { previousErrorScore }),
             errorHistory: previousErrorHistory.slice(0, -1)
           });
+
+      assertComparatorResultShape(comparison, "comparison.result");
 
       const threadId = readThreadId(state.runtime.metadata);
       emitTelemetry("step:completed", {
@@ -684,6 +712,8 @@ export function compileControlSystem<TTarget, TCurrent>(
             executionContext
           } satisfies VerifierInput<TTarget, TCurrent>)
         : undefined;
+
+      assertVerifierResultShape(verifierResult, "verifier.result");
 
       const iterationTokenBudget =
         config.stopPolicy.maxTokenBudget === undefined
@@ -825,10 +855,17 @@ export function compileControlSystem<TTarget, TCurrent>(
           throw err;
         }
       })();
+
+      assertJsonReadySerializable(nextCurrent, "interrupt.current");
+
       const humanDecision = mergeHumanDecision(
         state.runtime.humanDecision,
         normalizedResume.humanDecision
       );
+
+      if (humanDecision) {
+        assertJsonReadySerializable(humanDecision, "interrupt.humanDecision");
+      }
 
       if (normalizedResume.humanDecision?.action === "abort") {
         return {
@@ -941,6 +978,9 @@ export function compileControlSystem<TTarget, TCurrent>(
         normalizeMetadata(config.metadata, input.metadata),
         simulation
       );
+
+      assertJsonReadySerializable(metadata, "invoke.metadata");
+
       const validatedTarget = (() => {
         if (!config.schemas?.target) {
           return input.target;
@@ -959,6 +999,8 @@ export function compileControlSystem<TTarget, TCurrent>(
         }
       })();
 
+      assertJsonReadySerializable(validatedTarget, "invoke.target");
+
       const validatedCurrent = (() => {
         if (!config.schemas?.current) {
           return input.current;
@@ -976,10 +1018,16 @@ export function compileControlSystem<TTarget, TCurrent>(
           throw err;
         }
       })();
+
+      assertJsonReadySerializable(validatedCurrent, "invoke.current");
+
+      const worldContext = input.worldContext ?? {};
+      assertJsonReadySerializable(worldContext, "invoke.worldContext");
+
       const initialState = createInitialState({
         target: validatedTarget,
         current: validatedCurrent,
-        worldContext: input.worldContext ?? {},
+        worldContext,
         simulation,
         metadata,
         memoryConfig
@@ -990,6 +1038,9 @@ export function compileControlSystem<TTarget, TCurrent>(
       return loadThreadState(graph, threadConfig);
     },
     async interrupt(snapshot, humanDecision) {
+      if (humanDecision) {
+        assertJsonReadySerializable(humanDecision, "interrupt.humanDecision");
+      }
       const interruptedSnapshot = updateSnapshotStatus(
         snapshot,
         "awaiting_human_intervention",
@@ -1020,6 +1071,18 @@ export function compileControlSystem<TTarget, TCurrent>(
         return loadThreadState(graph, threadConfig);
       }
 
+      const mergedHumanDecision = mergeHumanDecision(
+        snapshot.runtime.humanDecision,
+        input.humanDecision
+      );
+
+      if (mergedHumanDecision) {
+        assertJsonReadySerializable(
+          mergedHumanDecision,
+          "resume.humanDecision"
+        );
+      }
+
       const resumedSnapshot: ControlState<TTarget, TCurrent> = {
         control: {
           ...snapshot.control,
@@ -1027,9 +1090,14 @@ export function compileControlSystem<TTarget, TCurrent>(
             input.current !== undefined
               ? (() => {
                   try {
-                    return config.schemas?.current
-                      ? config.schemas.current.parse(input.current)
-                      : input.current;
+                    if (config.schemas?.current) {
+                      const parsed = config.schemas.current.parse(input.current);
+                      assertJsonReadySerializable(parsed, "resume.current");
+                      return parsed;
+                    }
+
+                    assertJsonReadySerializable(input.current, "resume.current");
+                    return input.current;
                   } catch (err) {
                     if (err instanceof ZodError) {
                       throw new PrecuratorValidationError(
@@ -1046,14 +1114,7 @@ export function compileControlSystem<TTarget, TCurrent>(
         runtime: {
           ...snapshot.runtime,
           status: "optimizing",
-          ...(mergeHumanDecision(snapshot.runtime.humanDecision, input.humanDecision)
-            ? {
-                humanDecision: mergeHumanDecision(
-                  snapshot.runtime.humanDecision,
-                  input.humanDecision
-                ) as Record<string, JsonValue>
-              }
-            : {})
+          ...(mergedHumanDecision ? { humanDecision: mergedHumanDecision } : {})
         }
       };
 
@@ -1061,6 +1122,9 @@ export function compileControlSystem<TTarget, TCurrent>(
       return loadThreadState(graph, threadConfig);
     },
     async abort(snapshot, humanDecision) {
+      if (humanDecision) {
+        assertJsonReadySerializable(humanDecision, "abort.humanDecision");
+      }
       const abortedSnapshot = updateSnapshotStatus(
         snapshot,
         "aborted",

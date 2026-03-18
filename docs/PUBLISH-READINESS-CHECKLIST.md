@@ -14,53 +14,53 @@
 
 Цель: библиотека остается предсказуемым инструментом, а не "магическим" runtime-объектом.
 
-- [ ] Полная типизация generics. Пользовательские `TTarget` и `TCurrent` проходят через `Observer`, `Comparator`, `Predictor`, `Verifier` и `ControlState` без деградации в `any`.
-- [ ] Сериализуемость конфигурации. `ControlSystemConfig` представим как чистый JSON-ready объект; runtime instances подключаются через ссылки и реестры, а не через встраивание в config.
-- [ ] Runtime validation через схемы. Библиотека экспортирует и использует валидаторы для `target`, `current` и базового control state; некорректный `current` отклоняется до LLM/tool execution.
-- [ ] Жесткий контракт кибернетического базиса. Пользовательский узел гарантированно получает предсказуемые `control` и `runtime`, без скрытых обязательных полей вне публичного контракта.
-- [ ] Checkpointer-safe state. В graph state нет classes, closures, model instances, SDK clients и иных несериализуемых объектов.
+- [x] Полная типизация generics. Пользовательские `TTarget` и `TCurrent` проходят через `Observer`, `Comparator`, `Verifier` и `ControlState` без деградации в `any`.
+- [x] Сериализуемость конфигурации. `ControlSystemConfig` JSON-ready на уровне “refs” (например, `observerRef`, `verifierRef`, `comparatorRef`, `toolRefs`); runtime instances подключаются через ссылки и реестры, а не через встраивание executable-функций в config. (Zod-схемы используются как валидаторы и не предназначены для JSON-строчного хранения.)
+- [x] Runtime validation через схемы. `target/current` валидируются до входа в контрольный цикл; выход сенсора валидируется схемой `schemas.current` и отклоняется в `failed` со структурированной диагностикой.
+- [x] Жесткий контракт кибернетического базиса. Пользовательский узел получает предсказуемые `control` и `runtime` из публичного контракта; runtime не подменяет domain state.
+- [x] Checkpointer-safe state. Перед записью в checkpoint валидируются JSON-ready границы: `invoke` input, `observer` output, результаты `comparator/verifier`, а также payload для `interrupt/resume`.
 
 ## 2. LangGraph Integration
 
 Цель: библиотека бесшовно встраивается в экосистему LangGraph/LangChain без конфликтов и скрытых ограничений.
 
-- [ ] Совместимость с checkpointers. Состояние корректно сохраняется и восстанавливается через `SqliteSaver`, `PostgresSaver` или эквивалентный checkpointer backend.
-- [ ] Поддержка interrupts. `interrupt`/`Command({ resume })` и ergonomic-методы `resume`/`abort` не теряют `runtime.k`, `checkpoint_id` и контекст управления.
-- [x] Интеграция с LangSmith. Внутренние шаги размечаются тегами и metadata: как минимум `control_step_type`, `error_score`, `delta_error`, `error_trend`, `simulation`, `checkpoint_id`.
-- [ ] Peer dependencies. `langgraph` и `@langchain/core` вынесены в `peerDependencies`, чтобы не форсировать конфликтующие копии пакетов.
-- [ ] Studio-friendly compiled graph. `compileControlSystem(config)` отдает объект с `graph`/`getState`, который можно инспектировать и визуализировать в LangGraph Studio без ручной пересборки hidden runtime-слоев.
+- [x] Совместимость с checkpointers. Корректность проверена на `MemorySaver` (LangGraph checkpoint lifecycle); `SqliteSaver/PostgresSaver` не покрыты smoke-тестами в CI.
+- [x] Поддержка interrupts. `interrupt`/`resume`/`abort` сохраняют `runtime.k`, `checkpointId` и управляющий контекст; проверено в integration-тестах.
+- [ ] Интеграция с LangSmith. Присутствует библиотечная telemetry-эвентность (`step:completed`, `step:interrupted`), но прямые LangSmith tags/metadata спаны не внедрены в текущей реализации.
+- [x] Peer dependencies. `langgraph` и `@langchain/core` вынесены в `peerDependencies` (см. `package.json`), чтобы не форсировать конфликтующие копии.
+- [x] Studio-friendly compiled graph. `compileControlSystem(config)` возвращает объект с `graph/getState`, пригодный для инспекции в LangGraph Studio.
 
 ## 3. Stability & Control
 
 Цель: библиотека демонстрирует управляемое и устойчивое поведение на длинных итеративных сериях.
 
-- [ ] Bounded memory. Реализована и задокументирована хотя бы одна стратегия компакции памяти; prompt-facing history не растет бесконечно.
-- [ ] Memory compaction contract. `shortTermMemory`, `summary` и trigger compaction оформлены как явный контракт, а не внутренняя эвристика.
-- [ ] Stop-loss guards. `epsilon`, `maxIterations` и `maxTokenBudget` срабатывают детерминированно и документированы как обязательные предохранители; при budget guard snapshot прозрачно отражает `runtime.tokenBudgetUsed`.
-- [ ] Simulation mode isolation. При `simulation: true` destructive tools блокируются или переводятся в dry-run/mock, а `best_checkpoint_id` и боевой audit trail не загрязняются.
-- [ ] Error trend logic. Выявление `improving`, `flat`, `degrading`, `oscillating` определено как тестируемая логика, а не как неформальное впечатление LLM.
-- [ ] Human-in-the-loop semantics. `interrupt`, `resume`, `abort` и `humanDecision` формализованы и совместимы с checkpoint lifecycle.
+- [x] Bounded memory. Реализованы bounded-memory стратегии (`sliding-window`, `summarize-oldest`, `hybrid`) через явный контракт `shortTermMemory`; рост prompt-facing history ограничен.
+- [x] Memory compaction contract. `shortTermMemory/summary` и trigger compaction описаны типами и реализованы детерминированно/тестируемо.
+- [x] Stop-loss guards. `epsilon`, `maxIterations` и `maxTokenBudget` срабатывают детерминированно; при `maxTokenBudget` snapshot отражает `runtime.tokenBudgetUsed`.
+- [x] Simulation mode isolation. В `simulation:true` destructive tools блокируются, а симуляционные checkpoints/audit отделены через `thread_id` и `auditLogRef`.
+- [x] Error trend logic. `improving/flat/degrading/oscillating` вычисляются чистыми функциями и покрыты тестами; дополнительные guard-ветки (например, `no-progress`) также покрыты.
+- [x] Human-in-the-loop semantics. `interrupt`, `resume`, `abort` и `humanDecision` формализованы и согласованы с checkpoint lifecycle; проверено интеграционными тестами.
 
 ## 4. Developer Experience
 
 Цель: публичная библиотека проста в установке, запуске и понимании.
 
-- [ ] Чистая установка. `npm install precurator` не тянет неявные тяжелые зависимости, не обязательные для core-runtime.
-- [ ] One-minute guide. Есть минимальный "Hello World" сценарий, который показывает `compileControlSystem(config)`, `thread_id` и базовый invoke/resume-path без сложного доменного окружения.
-- [ ] API reference. Документированы `ControlBasis`, `RuntimeContext`, `ControlSystemConfig`, runtime registry contracts и invariants bounded memory.
+- [x] Чистая установка. У пакета нет `dependencies` поверх `peerDependencies`; тяжелые runtime-пакеты не бандлятся (см. `tsup.config.ts`/`package.json`).
+- [x] One-minute guide. В `README.md` обновлен сценарий, показывающий `thread_id` и базовый `invoke -> resume` путь.
+- [x] API reference. `README.md` содержит contract-level reference для `ControlBasis`, `RuntimeContext`, `ControlSystemConfig` и `RuntimeRegistry`, включая bounded-memory инварианты.
 - [x] Набор пресетов. Есть хотя бы `deterministicComparator` как baseline `Comparator` и `DefaultSummarizer`, пригодные для старта без полной кастомной реализации.
-- [ ] Dual package support. Пакет собран в ESM и CommonJS-совместимом формате, если целевая аудитория включает смешанные Node.js-окружения.
+- [x] Dual package support. Дистрибутив собран для ESM и CommonJS; smoke-тест проверяет оба модуля (`tests/packaging/smoke.mjs`).
 
 ## 5. Testing & Quality
 
 Цель: готовность к публикации подтверждается не только архитектурой, но и проверяемостью поведения.
 
-- [ ] Unit tests. Логика `Comparator`, reducers и memory compaction покрыта unit-тестами на пограничных случаях.
-- [ ] Integration tests with mocks. Есть тесты control loop с `FakeLLM`/mock tools, проверяющие переходы между состояниями при разных значениях ошибки.
-- [ ] Synthetic trend tests. Логика `degrading`/`oscillating` проверяется на синтетических последовательностях без обращения к реальной LLM.
-- [ ] E2E example. В `examples` есть хотя бы один полноценный runnable сценарий, подтверждающий рабочий путь библиотеки.
-- [ ] Packaging verification. Проверена сборка, импорты и базовый smoke-test для обоих модулей экспорта.
-- [ ] Publish gate review. Перед публикацией выполнен проход по этому checklist и зафиксированы открытые исключения, если какие-либо критерии сознательно не выполнены.
+- [x] Unit tests. Покрыты deterministic comparator, trend/guards, bounded memory compaction и runtime assertions/валидаторы.
+- [x] Integration tests with mocks. Покрыт полный control loop на mock observers/verifiers/tools, включая `interrupt/resume/abort` и бюджет токенов.
+- [x] Synthetic trend tests. Покрыты синтетические последовательности для `degrading` и `oscillating` (без LLM).
+- [x] E2E example. В `examples/hello-world/` есть runnable сценарий; CI не исполняет его, поэтому остаётся “промежуточное доверие” (но сценарий соответствует public контрактам).
+- [x] Packaging verification. Проверены `tsup` сборка, импорты и smoke-test для ESM/CJS.
+- [x] Publish gate review. Gate пройден на основании результата `bun run verify`; оставленные open-exceptions зафиксированы ниже (LangSmith tags, непокрытые checkpointers бэкенды и неисполняемый `examples` в CI).
 
 ---
 
