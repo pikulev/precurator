@@ -17,6 +17,7 @@ import {
   formatDisturbanceDelta,
   formatVector,
   isOutsideField,
+  maxFieldDistance,
   simulateAeolusStep,
   type AeolusCurrent,
   type AeolusTarget,
@@ -46,6 +47,8 @@ const currentSchema = z.object({
   lastDistanceToTarget: z.number(),
   reasoningTrace: z.string()
 });
+
+const AEOLOUS_STOP_EPSILON = 0.08;
 
 export interface AeolusDemoOptions {
   seed?: string;
@@ -89,7 +92,7 @@ export function createAeolusSystemEnvironment(): {
         current: currentSchema
       },
       stopPolicy: {
-        epsilon: 0.08,
+        epsilon: AEOLOUS_STOP_EPSILON,
         maxIterations: 30
       },
       memory: {
@@ -314,11 +317,19 @@ export async function runAeolusDemo(options: AeolusDemoOptions = {}): Promise<Ae
       ? { finalDiagnosticsCode: realitySnapshot.runtime.diagnostics.code }
       : {})
   });
+  const successRadiusWorld = round(AEOLOUS_STOP_EPSILON * maxFieldDistance(target));
 
   return {
     report: {
       generatedAt: new Date().toISOString(),
       target,
+      visualization: {
+        goalZone: {
+          label: "Goal zone",
+          epsilon: AEOLOUS_STOP_EPSILON,
+          successRadiusWorld
+        }
+      },
       runs: {
         simulation: simulationReport,
         reality: realityReport

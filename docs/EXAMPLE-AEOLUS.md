@@ -19,6 +19,9 @@ The example treats the field as a 2D plant with a target and a ball:
   - `target`: desired position, by default `(100, 100)`
   - `fieldMin`: lower field boundary, by default `0`
   - `fieldMax`: upper field boundary, by default `100`
+- dashboard visualization metadata
+  - `report.visualization.goalZone.epsilon`: the convergence threshold used by the stop policy
+  - `report.visualization.goalZone.successRadiusWorld`: a derived UI radius that turns the target into a visible success area
 - initial ball position: by default `(0, 0)`
 - `AeolusCurrent`
   - `position`: observed ball position after control and disturbance
@@ -116,7 +119,7 @@ Running the example creates:
 - `examples/aeolus/out/aeolus-dashboard.html`
 - `examples/aeolus/out/aeolus-report.json`
 
-The HTML report is self-contained and uses only embedded CSS, SVG and vanilla JavaScript.
+The HTML report is self-contained and uses only embedded CSS, SVG and vanilla JavaScript. The dashboard renders the target as a goal zone plus a center point, while convergence logic still comes from the control loop stop policy rather than the SVG itself.
 
 ## How To Run
 

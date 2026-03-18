@@ -29,6 +29,8 @@ export function renderAeolusDashboard(report: AeolusReport): string {
         --noise: #ef4444;
         --alert: #fb923c;
         --target: #f87171;
+        --target-zone-fill: rgba(248, 113, 113, 0.18);
+        --target-zone-stroke: rgba(252, 165, 165, 0.9);
       }
 
       * {
@@ -284,6 +286,11 @@ export function renderAeolusDashboard(report: AeolusReport): string {
         border-radius: 999px;
       }
 
+      .legendSwatchZone {
+        background: var(--target-zone-fill);
+        border: 1px solid var(--target-zone-stroke);
+      }
+
       @media (max-width: 1100px) {
         .page {
           grid-template-columns: 1fr;
@@ -320,6 +327,7 @@ export function renderAeolusDashboard(report: AeolusReport): string {
           <span class="badge">Step <strong id="stepValue">0</strong></span>
           <span class="badge">Checkpoint <strong id="checkpointValue">n/a</strong></span>
           <span class="badge">Mode <strong id="modeValue">reality</strong></span>
+          <span class="badge"><span id="goalZoneSummary">Goal zone radius 0.00u</span></span>
         </div>
 
         <input id="stepSlider" type="range" min="0" max="0" value="0" />
@@ -334,11 +342,12 @@ export function renderAeolusDashboard(report: AeolusReport): string {
             </marker>
           </defs>
           <rect x="10" y="10" width="400" height="400" rx="12" ry="12" fill="transparent" stroke="rgba(148,163,184,0.4)"></rect>
+          <circle id="goalZone" fill="var(--target-zone-fill)" stroke="var(--target-zone-stroke)" stroke-width="2" stroke-dasharray="8 6"></circle>
           <g id="previewPathLayer"></g>
           <g id="actualPathLayer"></g>
           <g id="ghostPathLayer"></g>
           <line id="alertLink" x1="0" y1="0" x2="0" y2="0" stroke="transparent" stroke-width="3" stroke-dasharray="7 5"></line>
-          <circle id="targetDot" r="10" fill="var(--target)"></circle>
+          <circle id="targetCenter" r="5" fill="var(--target)" stroke="#fee2e2" stroke-width="2"></circle>
           <circle id="ghostBall" r="9" fill="var(--ghost)"></circle>
           <circle id="actualBall" r="10" fill="var(--actual)"></circle>
           <line id="controlVector" x1="0" y1="0" x2="0" y2="0" stroke="var(--control)" stroke-width="4" marker-end="url(#arrowControl)"></line>
@@ -346,7 +355,8 @@ export function renderAeolusDashboard(report: AeolusReport): string {
         </svg>
 
         <div class="legend">
-          <span class="legendItem"><span class="legendSwatch" style="background: var(--target);"></span>Target</span>
+          <span class="legendItem"><span class="legendSwatch legendSwatchZone"></span>Goal Zone</span>
+          <span class="legendItem"><span class="legendSwatch" style="background: var(--target);"></span>Goal Center</span>
           <span class="legendItem"><span class="legendSwatch" style="background: var(--actual);"></span>Actual State</span>
           <span class="legendItem"><span class="legendSwatch" style="background: rgba(203, 213, 225, 0.8);"></span>Ghost Prediction</span>
           <span class="legendItem"><span class="legendSwatch" style="background: var(--control);"></span>Control Force</span>
@@ -444,22 +454,25 @@ export function renderAeolusDashboard(report: AeolusReport): string {
       const deltaErrorValue = document.getElementById("deltaErrorValue");
       const disturbanceValue = document.getElementById("disturbanceValue");
       const trendValue = document.getElementById("trendValue");
+      const goalZoneSummary = document.getElementById("goalZoneSummary");
       const reasoningTrace = document.getElementById("reasoningTrace");
       const alertBanner = document.getElementById("alertBanner");
       const auditLogBody = document.getElementById("auditLogBody");
       const toast = document.getElementById("toast");
+      const goalZone = document.getElementById("goalZone");
       const previewPathLayer = document.getElementById("previewPathLayer");
       const actualPathLayer = document.getElementById("actualPathLayer");
       const ghostPathLayer = document.getElementById("ghostPathLayer");
       const actualBall = document.getElementById("actualBall");
       const ghostBall = document.getElementById("ghostBall");
-      const targetDot = document.getElementById("targetDot");
+      const targetCenter = document.getElementById("targetCenter");
       const controlVector = document.getElementById("controlVector");
       const noiseVector = document.getElementById("noiseVector");
       const alertLink = document.getElementById("alertLink");
       const errorChart = document.getElementById("errorChart");
       const deltaChart = document.getElementById("deltaChart");
       const notesRoot = document.getElementById("notes");
+      const goalZoneMeta = report.visualization.goalZone;
 
       let activeRunKey = "reality";
       let stepIndex = 0;
@@ -477,6 +490,13 @@ export function renderAeolusDashboard(report: AeolusReport): string {
         const x = padding + ((clampedX - min) / (max - min)) * size;
         const y = padding + (1 - (clampedY - min) / (max - min)) * size;
         return { x, y };
+      }
+
+      function worldRadiusToSvg(worldRadius) {
+        const size = 400;
+        const min = report.target.fieldMin;
+        const max = report.target.fieldMax;
+        return (worldRadius / (max - min)) * size;
       }
 
       function createPath(points, color, dashArray, width) {
@@ -498,6 +518,10 @@ export function renderAeolusDashboard(report: AeolusReport): string {
         const projected = pointToSvg(point);
         node.setAttribute("cx", projected.x);
         node.setAttribute("cy", projected.y);
+      }
+
+      function setCircleRadius(node, worldRadius) {
+        node.setAttribute("r", worldRadiusToSvg(worldRadius));
       }
 
       function setVector(node, origin, vector, scaleMultiplier) {
@@ -603,7 +627,9 @@ export function renderAeolusDashboard(report: AeolusReport): string {
         actualPathLayer.innerHTML = createPath(actualPath, "var(--actual)", "", 3);
         ghostPathLayer.innerHTML = createPath(ghostPath, "rgba(203, 213, 225, 0.65)", "5 4", 2);
 
-        setCirclePosition(targetDot, report.target.target);
+        setCirclePosition(goalZone, report.target.target);
+        setCircleRadius(goalZone, goalZoneMeta.successRadiusWorld);
+        setCirclePosition(targetCenter, report.target.target);
         setCirclePosition(actualBall, step.actualPosition);
         setCirclePosition(ghostBall, step.predictedPosition);
         setVector(controlVector, step.actualPosition, step.controlForce, 1);
@@ -614,6 +640,12 @@ export function renderAeolusDashboard(report: AeolusReport): string {
         statusValue.textContent = step.status || run.finalStatus;
         checkpointValue.textContent = step.checkpointId || "n/a";
         modeValue.textContent = activeRunKey;
+        goalZoneSummary.textContent =
+          goalZoneMeta.label +
+          ": " +
+          goalZoneMeta.successRadiusWorld.toFixed(2) +
+          "u radius, reach at error <= " +
+          goalZoneMeta.epsilon.toFixed(2);
         errorScoreValue.textContent = typeof step.errorScore === "number" ? step.errorScore.toFixed(3) : "n/a";
         deltaErrorValue.textContent = typeof step.deltaError === "number" ? step.deltaError.toFixed(3) : "n/a";
         disturbanceValue.textContent = \`\${step.disturbanceDelta.x >= 0 ? "+" : ""}\${step.disturbanceDelta.x.toFixed(2)}, \${step.disturbanceDelta.y >= 0 ? "+" : ""}\${step.disturbanceDelta.y.toFixed(2)}\`;

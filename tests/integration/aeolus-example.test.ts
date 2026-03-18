@@ -6,6 +6,9 @@ describe("Aeolus example", () => {
   it("produces a converging preview path and a converging reality run", async () => {
     const result = await runAeolusDemo({ seed: "steady-breeze" });
 
+    expect(result.report.visualization.goalZone.label).toBe("Goal zone");
+    expect(result.report.visualization.goalZone.epsilon).toBe(0.08);
+    expect(result.report.visualization.goalZone.successRadiusWorld).toBeGreaterThan(0);
     expect(result.runs.simulation.finalStatus).toBe("converged");
     expect(result.runs.reality.finalStatus).toBe("converged");
     expect(result.runs.simulation.steps.length).toBeGreaterThanOrEqual(20);

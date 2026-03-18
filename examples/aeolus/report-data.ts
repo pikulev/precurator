@@ -48,9 +48,20 @@ export interface AeolusRunReport {
   auditLog: AeolusAuditRow[];
 }
 
+export interface AeolusGoalZoneVisualization {
+  label: string;
+  epsilon: number;
+  successRadiusWorld: number;
+}
+
+export interface AeolusVisualizationMetadata {
+  goalZone: AeolusGoalZoneVisualization;
+}
+
 export interface AeolusReport {
   generatedAt: string;
   target: AeolusTarget;
+  visualization: AeolusVisualizationMetadata;
   runs: {
     simulation: AeolusRunReport;
     reality: AeolusRunReport;
