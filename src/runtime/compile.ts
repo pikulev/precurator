@@ -7,6 +7,7 @@ import {
   StateGraph,
   interrupt
 } from "@langchain/langgraph";
+import { ZodError } from "zod";
 
 import type { ControlState, JsonValue } from "../contracts/state";
 import { deterministicComparator } from "../comparator/deterministic";
@@ -29,11 +30,12 @@ import type {
   VerifierInput,
   VerifierResult
 } from "./config";
-import { SimulationSecurityError } from "./errors";
+import { PrecuratorValidationError, SimulationSecurityError } from "./errors";
 import {
   resolveIterationOutcome,
   shouldContinue
 } from "./routing";
+import { assertJsonReadySerializable } from "./serializability";
 
 const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
   maxShortTermSteps: 8,
@@ -488,21 +490,49 @@ export function compileControlSystem<TTarget, TCurrent>(
       }
 
       const executionContext = createExecutionContext(config, runtimeRegistry, state);
-      const observedCurrent = await observer({
+      const rawObservedCurrent = await observer({
         target: state.control.target,
         current: state.control.current,
         worldContext: state.control.worldContext,
         ...(state.runtime.metadata ? { metadata: state.runtime.metadata } : {}),
         executionContext
       } satisfies ObserverInput<TTarget, TCurrent>);
-      const nextCurrent = config.schemas?.current
-        ? config.schemas.current.parse(observedCurrent)
-        : observedCurrent;
+
+      assertJsonReadySerializable(rawObservedCurrent, "observer.current");
+
+      // "Тихая" деградация: если сенсор вернул данные, не проходящие схему,
+      // мы фиксируем fault и завершаем цикл, не обновляя control.current.
+      if (config.schemas?.current) {
+        const parsed = config.schemas.current.safeParse(rawObservedCurrent);
+        if (!parsed.success) {
+          return {
+            runtime: {
+              ...state.runtime,
+              status: "failed",
+              stopReason: "unrecoverable_schema_violation",
+              diagnostics: {
+                code: "OBSERVATION_SCHEMA_VIOLATION",
+                message: parsed.error.message,
+                evidence: {
+                  rawOutput: rawObservedCurrent
+                }
+              }
+            }
+          };
+        }
+
+        return {
+          control: {
+            ...state.control,
+            current: parsed.data
+          }
+        };
+      }
 
       return {
         control: {
           ...state.control,
-          current: nextCurrent
+          current: rawObservedCurrent
         }
       };
     })
@@ -670,12 +700,26 @@ export function compileControlSystem<TTarget, TCurrent>(
         ...(state.runtime.stopReason ? { stopReason: state.runtime.stopReason } : {})
       });
       const normalizedResume = normalizeResumePayload<TCurrent>(resumePayload);
-      const nextCurrent =
-        normalizedResume.current !== undefined
-          ? config.schemas?.current
+      const nextCurrent = (() => {
+        if (normalizedResume.current === undefined) {
+          return state.control.current;
+        }
+
+        try {
+          return config.schemas?.current
             ? config.schemas.current.parse(normalizedResume.current)
-            : normalizedResume.current
-          : state.control.current;
+            : normalizedResume.current;
+        } catch (err) {
+          if (err instanceof ZodError) {
+            throw new PrecuratorValidationError(
+              "Invalid `current` provided during resume/interrupt.",
+              err.issues
+            );
+          }
+
+          throw err;
+        }
+      })();
       const humanDecision = mergeHumanDecision(
         state.runtime.humanDecision,
         normalizedResume.humanDecision
@@ -709,7 +753,11 @@ export function compileControlSystem<TTarget, TCurrent>(
       };
     })
     .addEdge("__start__", "observe")
-    .addEdge("observe", "compare")
+    .addConditionalEdges(
+      "observe",
+      (state: ControlState<TTarget, TCurrent>) =>
+        state.runtime.status === "optimizing" ? "compare" : END
+    )
     .addEdge("compare", "verify")
     .addEdge("verify", "compactMemory")
     .addConditionalEdges("compactMemory", (state: ControlState<TTarget, TCurrent>) =>
@@ -765,12 +813,41 @@ export function compileControlSystem<TTarget, TCurrent>(
         normalizeMetadata(config.metadata, input.metadata),
         simulation
       );
-      const validatedTarget = config.schemas?.target
-        ? config.schemas.target.parse(input.target)
-        : input.target;
-      const validatedCurrent = config.schemas?.current
-        ? config.schemas.current.parse(input.current)
-        : input.current;
+      const validatedTarget = (() => {
+        if (!config.schemas?.target) {
+          return input.target;
+        }
+
+        try {
+          return config.schemas.target.parse(input.target);
+        } catch (err) {
+          if (err instanceof ZodError) {
+            throw new PrecuratorValidationError(
+              "Invalid `target` provided to invoke().",
+              err.issues
+            );
+          }
+          throw err;
+        }
+      })();
+
+      const validatedCurrent = (() => {
+        if (!config.schemas?.current) {
+          return input.current;
+        }
+
+        try {
+          return config.schemas.current.parse(input.current);
+        } catch (err) {
+          if (err instanceof ZodError) {
+            throw new PrecuratorValidationError(
+              "Invalid `current` provided to invoke().",
+              err.issues
+            );
+          }
+          throw err;
+        }
+      })();
       const initialState = createInitialState({
         target: validatedTarget,
         current: validatedCurrent,
@@ -820,9 +897,22 @@ export function compileControlSystem<TTarget, TCurrent>(
           ...snapshot.control,
           current:
             input.current !== undefined
-              ? config.schemas?.current
-                ? config.schemas.current.parse(input.current)
-                : input.current
+              ? (() => {
+                  try {
+                    return config.schemas?.current
+                      ? config.schemas.current.parse(input.current)
+                      : input.current;
+                  } catch (err) {
+                    if (err instanceof ZodError) {
+                      throw new PrecuratorValidationError(
+                        "Invalid `current` provided to resume().",
+                        err.issues
+                      );
+                    }
+
+                    throw err;
+                  }
+                })()
               : snapshot.control.current
         },
         runtime: {

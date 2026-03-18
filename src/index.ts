@@ -52,7 +52,11 @@ export type {
   VerifierInput,
   VerifierResult
 } from "./runtime/config";
-export { SimulationSecurityError } from "./runtime/errors";
+export {
+  NonSerializableDataError,
+  PrecuratorValidationError,
+  SimulationSecurityError
+} from "./runtime/errors";
 export {
   resolveIterationOutcome,
   shouldContinue

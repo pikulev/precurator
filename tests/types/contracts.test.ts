@@ -1,4 +1,5 @@
 import { expectTypeOf } from "expect-type";
+import { z } from "zod";
 
 import type {
   ControlState,
@@ -79,5 +80,17 @@ expectTypeOf(tool.execute).toBeFunction();
 
 // @ts-expect-error `goal` must remain a string across the public contract.
 const invalidTarget: Snapshot["control"]["target"] = { goal: 123 };
+
+compileControlSystem<TargetState, CurrentState>({
+  schemas: {
+    // @ts-expect-error `schemas.target` must match the declared `TTarget`.
+    target: z.object({ goal: z.number() }),
+    current: z.object({ goal: z.string() })
+  },
+  stopPolicy: {
+    epsilon: 0.05,
+    maxIterations: 3
+  }
+});
 
 void invalidTarget;

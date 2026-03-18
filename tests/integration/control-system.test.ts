@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import {
+  NonSerializableDataError,
+  PrecuratorValidationError,
   SimulationSecurityError,
   compileControlSystem,
   deriveErrorTrend
@@ -61,6 +63,124 @@ describe("compileControlSystem", () => {
     expect(snapshot.runtime.status).toBe("failed");
     expect(snapshot.runtime.stopReason).toBe("max-iterations-reached");
     expect(snapshot.runtime.k).toBe(1);
+  });
+
+  it("fails fast on invalid invoke input (schemas.target)", async () => {
+    const system = compileControlSystem({
+      schemas: {
+        target: z.object({ value: z.number() }),
+        current: z.object({ value: z.number() })
+      },
+      stopPolicy: {
+        epsilon: 0,
+        maxIterations: 2
+      }
+    });
+
+    await expect(() =>
+      system.invoke({
+        target: { value: "not-a-number" } as any,
+        current: { value: 0 }
+      })
+    ).rejects.toBeInstanceOf(PrecuratorValidationError);
+  });
+
+  it("marks observer schema violations as failed without throwing", async () => {
+    const validCurrent = { value: 1 };
+
+    const system = compileControlSystem({
+      schemas: {
+        target: z.object({ value: z.number() }),
+        current: z.object({ value: z.number() })
+      },
+      stopPolicy: {
+        epsilon: 0,
+        maxIterations: 3
+      },
+      observerRef: "bad-observer"
+    }, {
+      observers: {
+        "bad-observer": () => ({
+          value: "not-a-number",
+          leaked: { reason: "sensor-broke" }
+        })
+      }
+    });
+
+    const snapshot = await system.invoke({
+      target: { value: 2 },
+      current: validCurrent
+    });
+
+    expect(snapshot.runtime.status).toBe("failed");
+    expect(snapshot.runtime.stopReason).toBe("unrecoverable_schema_violation");
+    expect(snapshot.runtime.diagnostics?.code).toBe(
+      "OBSERVATION_SCHEMA_VIOLATION"
+    );
+    expect(snapshot.runtime.diagnostics?.evidence).toMatchObject({
+      rawOutput: {
+        value: "not-a-number",
+        leaked: { reason: "sensor-broke" }
+      }
+    });
+    expect(snapshot.control.current).toEqual(validCurrent);
+  });
+
+  it("strips unknown keys from observer output based on schemas.current", async () => {
+    const system = compileControlSystem({
+      schemas: {
+        target: z.object({ value: z.number() }),
+        current: z.object({ value: z.number() })
+      },
+      stopPolicy: {
+        epsilon: 0,
+        maxIterations: 1
+      },
+      observerRef: "strip-observer"
+    }, {
+      observers: {
+        "strip-observer": () => ({
+          value: 1,
+          extra: "should-not-leak"
+        })
+      }
+    });
+
+    const snapshot = await system.invoke({
+      target: { value: 1 },
+      current: { value: 0 }
+    });
+
+    expect(snapshot.runtime.status).toBe("converged");
+    expect(snapshot.control.current).toEqual({ value: 1 });
+    expect((snapshot.control.current as any).extra).toBeUndefined();
+  });
+
+  it("throws NonSerializableDataError when observer returns non-serializable current", async () => {
+    const system = compileControlSystem({
+      schemas: {
+        target: z.object({ value: z.number() }),
+        current: z.object({ value: z.number() })
+      },
+      stopPolicy: {
+        epsilon: 0,
+        maxIterations: 1
+      },
+      observerRef: "non-serializable-observer"
+    }, {
+      observers: {
+        "non-serializable-observer": () => ({
+          value: new Date()
+        } as any)
+      }
+    });
+
+    await expect(() =>
+      system.invoke({
+        target: { value: 1 },
+        current: { value: 0 }
+      })
+    ).rejects.toBeInstanceOf(NonSerializableDataError);
   });
 
   it("marks oscillating trajectories as stuck", async () => {
