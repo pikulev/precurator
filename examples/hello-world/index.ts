@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   );
 
   const interrupted = await system.invoke({
-    target: { value: 5 },
+    target: { value: 50 },
     current: { value: 2 },
     metadata: {
       thread_id: "hello-world"

@@ -365,7 +365,8 @@ function updateSnapshotStatus<TTarget, TCurrent>(
 function createThreadConfig(
   metadata: Record<string, JsonValue> | undefined,
   simulation: boolean,
-  checkpointId?: string
+  checkpointId?: string,
+  recursionLimit?: number
 ): RunnableConfig {
   const threadId = readThreadId(metadata);
   if (!threadId) {
@@ -376,8 +377,13 @@ function createThreadConfig(
     configurable: {
       thread_id: `${simulation ? "simulation" : "runtime"}:${threadId}`,
       ...(checkpointId ? { checkpoint_id: checkpointId } : {})
-    }
+    },
+    ...(recursionLimit !== undefined ? { recursionLimit } : {})
   };
+}
+
+function deriveRecursionLimit(maxIterations: number): number {
+  return Math.max(25, maxIterations * 5 + 10);
 }
 
 function readCheckpointId(config: RunnableConfig): string | undefined {
@@ -766,12 +772,18 @@ export function compileControlSystem<TTarget, TCurrent>(
         ...(threadId ? { thread_id: threadId } : {})
       });
 
+      const {
+        diagnostics: _previousDiagnostics,
+        stopReason: _previousStopReason,
+        ...runtimeWithoutTransientOutcome
+      } = state.runtime;
+
       return {
         runtime: {
-          ...state.runtime,
+          ...runtimeWithoutTransientOutcome,
           status: outcome.status,
-          ...(outcome.stopReason ? { stopReason: outcome.stopReason } : {}),
-          ...(outcome.diagnostics ? { diagnostics: outcome.diagnostics } : {}),
+          ...(outcome.stopReason !== undefined ? { stopReason: outcome.stopReason } : {}),
+          ...(outcome.diagnostics !== undefined ? { diagnostics: outcome.diagnostics } : {}),
           ...(config.stopPolicy.maxTokenBudget !== undefined
             ? { tokenBudgetUsed: nextTokenBudgetUsed }
             : {})
@@ -1032,7 +1044,12 @@ export function compileControlSystem<TTarget, TCurrent>(
         metadata,
         memoryConfig
       });
-      const threadConfig = createThreadConfig(metadata, simulation);
+      const threadConfig = createThreadConfig(
+        metadata,
+        simulation,
+        undefined,
+        deriveRecursionLimit(config.stopPolicy.maxIterations)
+      );
 
       await graph.invoke(initialState, threadConfig);
       return loadThreadState(graph, threadConfig);
@@ -1063,7 +1080,12 @@ export function compileControlSystem<TTarget, TCurrent>(
         snapshot.runtime.metadata,
         snapshot.runtime.simulation
       );
-      const threadConfig = createThreadConfig(metadata, snapshot.runtime.simulation);
+      const threadConfig = createThreadConfig(
+        metadata,
+        snapshot.runtime.simulation,
+        undefined,
+        deriveRecursionLimit(config.stopPolicy.maxIterations)
+      );
       const persistedState = await graph.getState(threadConfig).catch(() => undefined);
 
       if (persistedState && hasPendingInterrupt(persistedState)) {

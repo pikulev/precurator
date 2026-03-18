@@ -82,6 +82,12 @@ const snapshot =
 
 The canonical entrypoint is `compileControlSystem(config)`. Runtime instances should stay outside config/state and be resolved through external registries.
 
+## Examples
+
+- `examples/hello-world/`: minimal `invoke -> resume` walkthrough.
+- `examples/aeolus/`: long-horizon turbulent control demo with simulation preview, verifier disturbance detection and a self-contained HTML dashboard.
+- `docs/EXAMPLE-AEOLUS.md`: contract-aware walkthrough of the `Aeolus` scenario and its generated artifacts.
+
 ## Deterministic Presets
 
 For early TDD cycles and synthetic control tests, the package also exports deterministic helpers:
@@ -154,5 +160,6 @@ bun run verify
 - `src/` public contracts, runtime stubs, and bounded-memory helpers
 - `tests/` unit, integration, type, and packaging checks
 - `examples/hello-world/` minimal runnable scenario
+- `examples/aeolus/` turbulent control demo with HTML reporting
 - `docs/` ADRs, TDD plan, and publish-readiness criteria
 - `.cursor/rules/` persistent guidance for coding agents

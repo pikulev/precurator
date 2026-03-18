@@ -65,6 +65,105 @@ describe("compileControlSystem", () => {
     expect(snapshot.runtime.k).toBe(1);
   });
 
+  it("supports long control loops without hitting LangGraph recursion limits", async () => {
+    const system = compileControlSystem<
+      { ignored: boolean },
+      { iteration: number; errorScore: number }
+    >({
+      stopPolicy: {
+        epsilon: 0,
+        maxIterations: 35
+      },
+      observerRef: "long-horizon-observer",
+      comparatorRef: "long-horizon-comparator"
+    }, {
+      observers: {
+        "long-horizon-observer": ({ current }) => ({
+          iteration: current.iteration + 1,
+          errorScore: Number(Math.max(0, 1 - (current.iteration + 1) / 30).toFixed(6))
+        })
+      },
+      comparators: {
+        "long-horizon-comparator": ({ current, previousErrorScore }) => ({
+          errorVector: { iteration: current.iteration },
+          errorScore: current.errorScore,
+          deltaError:
+            previousErrorScore === undefined
+              ? current.errorScore
+              : Number((current.errorScore - previousErrorScore).toFixed(6)),
+          errorTrend: "improving" as const
+        })
+      }
+    });
+
+    const snapshot = await system.invoke({
+      target: { ignored: true },
+      current: {
+        iteration: 0,
+        errorScore: 1
+      },
+      metadata: {
+        thread_id: "long-horizon"
+      }
+    });
+
+    expect(snapshot.runtime.status).toBe("converged");
+    expect(snapshot.runtime.stopReason).toBe("epsilon-reached");
+    expect(snapshot.runtime.k).toBe(29);
+    expect(snapshot.control.current).toEqual({
+      iteration: 30,
+      errorScore: 0
+    });
+  });
+
+  it("clears transient verifier diagnostics after a later clean converge", async () => {
+    const verifier = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "optimizing" as const,
+        diagnostics: {
+          code: "DISTURBANCE_DETECTED",
+          message: "External disturbance observed."
+        }
+      })
+      .mockResolvedValueOnce({
+        status: "optimizing" as const
+      });
+    const system = compileControlSystem({
+      schemas: {
+        target: z.object({ value: z.number() }),
+        current: z.object({ value: z.number() })
+      },
+      stopPolicy: {
+        epsilon: 0,
+        maxIterations: 4
+      },
+      observerRef: "increment-observer",
+      verifierRef: "transient-diagnostics-verifier"
+    }, {
+      observers: {
+        "increment-observer": ({ current, target }) => ({
+          value: Math.min(current.value + 1, target.value)
+        })
+      },
+      verifiers: {
+        "transient-diagnostics-verifier": verifier
+      }
+    });
+
+    const snapshot = await system.invoke({
+      target: { value: 2 },
+      current: { value: 0 },
+      metadata: {
+        thread_id: "transient-diagnostics"
+      }
+    });
+
+    expect(snapshot.runtime.status).toBe("converged");
+    expect(snapshot.runtime.stopReason).toBe("epsilon-reached");
+    expect(snapshot.runtime.diagnostics).toBeUndefined();
+  });
+
   it("fails fast on invalid invoke input (schemas.target)", async () => {
     const system = compileControlSystem({
       schemas: {
