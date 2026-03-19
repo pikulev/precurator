@@ -16,11 +16,11 @@ It is meant for systems that stop being simple after the first successful run. O
 ## Install
 
 ```bash
-npm install precurator @langchain/core @langchain/langgraph zod
+npm install @piklv/precurator @langchain/core @langchain/langgraph zod
 ```
 
 ```bash
-bun add precurator @langchain/core @langchain/langgraph zod
+bun add @piklv/precurator @langchain/core @langchain/langgraph zod
 ```
 
 `@langchain/core`, `@langchain/langgraph`, and `zod` are peer dependencies. That keeps `precurator` easy to embed into an existing LangGraph stack without forcing duplicate runtimes or hidden provider choices.
@@ -109,7 +109,7 @@ The smallest runnable example is in `examples/hello-world/`. It is intentionally
 
 ```ts
 import { z } from "zod";
-import { compileControlSystem } from "precurator";
+import { compileControlSystem } from "@piklv/precurator";
 
 const system = compileControlSystem(
   {
@@ -369,7 +369,7 @@ The runtime you actually execute.
 For synthetic tests and deterministic loops, the package also exports helpers:
 
 ```ts
-import { deriveErrorTrend, deterministicComparator } from "precurator";
+import { deriveErrorTrend, deterministicComparator } from "@piklv/precurator";
 
 const comparison = deterministicComparator({
   target: { value: 10 },

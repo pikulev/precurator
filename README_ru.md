@@ -16,11 +16,11 @@
 ## Установка
 
 ```bash
-npm install precurator @langchain/core @langchain/langgraph zod
+npm install @piklv/precurator @langchain/core @langchain/langgraph zod
 ```
 
 ```bash
-bun add precurator @langchain/core @langchain/langgraph zod
+bun add @piklv/precurator @langchain/core @langchain/langgraph zod
 ```
 
 `@langchain/core`, `@langchain/langgraph` и `zod` подключаются как peer dependencies. Благодаря этому `precurator` легко встраивается в существующий стек LangGraph и не тянет за собой дублирующиеся рантаймы или навязанный выбор провайдера.
@@ -105,7 +105,7 @@ flowchart LR
 
 ```ts
 import { z } from "zod";
-import { compileControlSystem } from "precurator";
+import { compileControlSystem } from "@piklv/precurator";
 
 const system = compileControlSystem(
   {
@@ -365,7 +365,7 @@ Payload'ы включают такие поля, как `error_score`, `delta_er
 Для синтетических тестов и детерминированных циклов пакет также экспортирует helper'ы:
 
 ```ts
-import { deriveErrorTrend, deterministicComparator } from "precurator";
+import { deriveErrorTrend, deterministicComparator } from "@piklv/precurator";
 
 const comparison = deterministicComparator({
   target: { value: 10 },

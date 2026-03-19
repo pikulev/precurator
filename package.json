@@ -1,5 +1,5 @@
 {
-  "name": "precurator",
+  "name": "@piklv/precurator",
   "version": "0.1.0",
   "description": "Cybernetic control primitives for AI agents on top of LangGraph.",
   "license": "MIT",

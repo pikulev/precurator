@@ -16,11 +16,11 @@
 ## 安装
 
 ```bash
-npm install precurator @langchain/core @langchain/langgraph zod
+npm install @piklv/precurator @langchain/core @langchain/langgraph zod
 ```
 
 ```bash
-bun add precurator @langchain/core @langchain/langgraph zod
+bun add @piklv/precurator @langchain/core @langchain/langgraph zod
 ```
 
 `@langchain/core`、`@langchain/langgraph` 和 `zod` 是 peer dependencies。这样可以让 `precurator` 更容易嵌入现有的 LangGraph 技术栈，而不会强制引入重复 runtime 或隐藏的 provider 选择。
@@ -111,7 +111,7 @@ flowchart LR
 
 ```ts
 import { z } from "zod";
-import { compileControlSystem } from "precurator";
+import { compileControlSystem } from "@piklv/precurator";
 
 const system = compileControlSystem(
   {
@@ -371,7 +371,7 @@ payload 中包含诸如 `error_score`、`delta_error`、`error_trend`、`simulat
 对于合成测试与确定性循环，这个包还导出了辅助函数：
 
 ```ts
-import { deriveErrorTrend, deterministicComparator } from "precurator";
+import { deriveErrorTrend, deterministicComparator } from "@piklv/precurator";
 
 const comparison = deterministicComparator({
   target: { value: 10 },
