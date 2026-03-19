@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type {
   ControlState,
-  ObserverHandler,
+  EvolveHandler,
   RuntimeContext,
   RuntimeExecutionContext,
   ToolRegistration,
@@ -83,7 +83,7 @@ expectTypeOf(snapshot.runtime.tokenBudgetUsed).toEqualTypeOf<number | undefined>
 expectTypeOf(snapshot.control.target).toEqualTypeOf<TargetState>();
 expectTypeOf(snapshot.control.current).toEqualTypeOf<CurrentState>();
 
-type Observer = ObserverHandler<TargetState, CurrentState>;
+type Evolver = EvolveHandler<TargetState, CurrentState>;
 type Verifier = VerifierHandler<TargetState, CurrentState>;
 
 const executionContext = {
@@ -93,7 +93,7 @@ const executionContext = {
   invokeTool: async () => undefined
 } as unknown as RuntimeExecutionContext;
 
-const observer = (async () => ({ goal: "noop" } as CurrentState)) as unknown as Observer;
+const evolver = (async () => ({ goal: "noop" } as CurrentState)) as unknown as Evolver;
 
 const verifier = (async () => ({ status: "optimizing" as const })) as unknown as Verifier;
 
@@ -104,7 +104,7 @@ const tool = {
 expectTypeOf(executionContext.invokeTool).toBeCallableWith("tool-ref", {
   dryRun: true
 });
-expectTypeOf(observer).returns.toMatchTypeOf<Promise<CurrentState> | CurrentState>();
+expectTypeOf(evolver).returns.toMatchTypeOf<Promise<CurrentState> | CurrentState>();
 expectTypeOf(verifier).returns.toMatchTypeOf<
   Promise<{ status?: RuntimeContext["status"] }> | { status?: RuntimeContext["status"] }
 >();

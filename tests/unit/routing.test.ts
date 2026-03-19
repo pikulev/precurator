@@ -34,14 +34,14 @@ describe("shouldContinue", () => {
     ).toBe("interrupt");
   });
 
-  it("continues observing while optimization is still in progress", () => {
+  it("continues evolving while optimization is still in progress", () => {
     expect(
       shouldContinue({
         status: "optimizing",
         errorScore: 0.4,
         epsilon: 0.05
       })
-    ).toBe("observe");
+    ).toBe("evolve");
   });
 });
 

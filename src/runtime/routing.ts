@@ -6,7 +6,7 @@ import type { VerifierResult } from "./config";
 type RuntimeStatus = ControlState<unknown, unknown>["runtime"]["status"];
 type RuntimeDiagnostics = ControlState<unknown, unknown>["runtime"]["diagnostics"];
 
-export type ControlRoute = "observe" | "interrupt" | typeof END;
+export type ControlRoute = "evolve" | "interrupt" | typeof END;
 
 export interface ShouldContinueInput {
   status: RuntimeStatus;
@@ -155,5 +155,5 @@ export function shouldContinue(input: ShouldContinueInput): ControlRoute {
     return END;
   }
 
-  return input.errorScore <= input.epsilon ? END : "observe";
+  return input.errorScore <= input.epsilon ? END : "evolve";
 }

@@ -94,7 +94,7 @@ export class AeolusReportCollector {
     });
   }
 
-  recordObservation(input: {
+  recordEvolution(input: {
     threadId: string;
     k: number;
     simulation: boolean;

@@ -14,11 +14,11 @@
 
 Цель: библиотека остается предсказуемым инструментом, а не "магическим" runtime-объектом.
 
-- [x] Полная типизация generics. Пользовательские `TTarget` и `TCurrent` проходят через `Observer`, `Comparator`, `Verifier` и `ControlState` без деградации в `any`.
-- [x] Сериализуемость конфигурации. `ControlSystemConfig` JSON-ready на уровне “refs” (например, `observerRef`, `verifierRef`, `comparatorRef`, `toolRefs`); runtime instances подключаются через ссылки и реестры, а не через встраивание executable-функций в config. (Zod-схемы используются как валидаторы и не предназначены для JSON-строчного хранения.)
+- [x] Полная типизация generics. Пользовательские `TTarget` и `TCurrent` проходят через `Evolve`, `Comparator`, `Verifier` и `ControlState` без деградации в `any`.
+- [x] Сериализуемость конфигурации. `ControlSystemConfig` JSON-ready на уровне “refs” (например, `evolveRef`, `verifierRef`, `comparatorRef`, `toolRefs`); runtime instances подключаются через ссылки и реестры, а не через встраивание executable-функций в config. (Zod-схемы используются как валидаторы и не предназначены для JSON-строчного хранения.)
 - [x] Runtime validation через схемы. `target/current` валидируются до входа в контрольный цикл; выход сенсора валидируется схемой `schemas.current` и отклоняется в `failed` со структурированной диагностикой.
 - [x] Жесткий контракт кибернетического базиса. Пользовательский узел получает предсказуемые `control` и `runtime` из публичного контракта; runtime не подменяет domain state.
-- [x] Checkpointer-safe state. Перед записью в checkpoint валидируются JSON-ready границы: `invoke` input, `observer` output, результаты `comparator/verifier`, а также payload для `interrupt/resume`.
+- [x] Checkpointer-safe state. Перед записью в checkpoint валидируются JSON-ready границы: `invoke` input, `evolve` output, результаты `comparator/verifier`, а также payload для `interrupt/resume`.
 
 ## 2. LangGraph Integration
 
@@ -56,7 +56,7 @@
 Цель: готовность к публикации подтверждается не только архитектурой, но и проверяемостью поведения.
 
 - [x] Unit tests. Покрыты deterministic comparator, trend/guards, bounded memory compaction и runtime assertions/валидаторы.
-- [x] Integration tests with mocks. Покрыт полный control loop на mock observers/verifiers/tools, включая `interrupt/resume/abort` и бюджет токенов.
+- [x] Integration tests with mocks. Покрыт полный control loop на mock evolvers/verifiers/tools, включая `interrupt/resume/abort` и бюджет токенов.
 - [x] Synthetic trend tests. Покрыты синтетические последовательности для `degrading` и `oscillating` (без LLM).
 - [x] E2E example. В `examples/hello-world/` есть runnable сценарий; CI не исполняет его, поэтому остаётся “промежуточное доверие” (но сценарий соответствует public контрактам).
 - [x] Packaging verification. Проверены `tsup` сборка, импорты и smoke-test для ESM/CJS.

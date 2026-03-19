@@ -69,7 +69,7 @@ export interface ToolRegistration {
   dryRun?: (input: ToolInvocation) => unknown | Promise<unknown>;
 }
 
-export interface ObserverInput<TTarget, TCurrent> {
+export interface EvolveInput<TTarget, TCurrent> {
   target: TTarget;
   current: TCurrent;
   worldContext: Record<string, unknown>;
@@ -77,8 +77,8 @@ export interface ObserverInput<TTarget, TCurrent> {
   executionContext: RuntimeExecutionContext;
 }
 
-export type ObserverHandler<TTarget, TCurrent> = (
-  input: ObserverInput<TTarget, TCurrent>
+export type EvolveHandler<TTarget, TCurrent> = (
+  input: EvolveInput<TTarget, TCurrent>
 ) => TCurrent | Promise<TCurrent>;
 
 export interface VerifierInput<TTarget, TCurrent> {
@@ -127,7 +127,7 @@ export interface ControlSystemConfig<TTarget, TCurrent> {
   memory?: Partial<MemoryConfig>;
   mode?: "conservative" | "balanced" | "aggressive";
   modelRef?: string;
-  observerRef?: string;
+  evolveRef?: string;
   verifierRef?: string;
   toolRefs?: string[];
   metadata?: Record<string, JsonValue>;
@@ -142,7 +142,7 @@ export interface ControlSystemConfig<TTarget, TCurrent> {
 export interface RuntimeRegistry<TTarget = unknown, TCurrent = unknown> {
   summarizeCompactedSteps?: SummarizeCompactedSteps;
   models?: Record<string, unknown>;
-  observers?: Record<string, ObserverHandler<TTarget, TCurrent>>;
+  evolvers?: Record<string, EvolveHandler<TTarget, TCurrent>>;
   verifiers?: Record<string, VerifierHandler<TTarget, TCurrent>>;
   comparators?: Record<string, ComparatorHandler<TTarget, TCurrent>>;
   tools?: Record<string, ToolRegistration>;
@@ -205,7 +205,7 @@ export interface CompiledControlSystem<TTarget, TCurrent> {
 
 export type PrecuratorTelemetryEventName = "step:completed" | "step:interrupted";
 
-export type TelemetryControlStepType = "Observation" | "Comparison" | "Prediction" | "Execution";
+export type TelemetryControlStepType = "Evolution" | "Comparison" | "Prediction" | "Execution";
 
 export interface StepCompletedTelemetryPayload {
   control_step_type: TelemetryControlStepType;

@@ -17,11 +17,11 @@ describe("telemetry events", () => {
           epsilon: 0,
           maxIterations: 5
         },
-        observerRef: "increment-observer"
+        evolveRef: "increment-evolver"
       },
       {
-        observers: {
-          "increment-observer": ({ current, target }) => ({
+        evolvers: {
+          "increment-evolver": ({ current, target }) => ({
             value: Math.min(current.value + 5, target.value)
           })
         }
@@ -52,7 +52,7 @@ describe("telemetry events", () => {
     }
 
     expect(completed.map((p) => p.control_step_type)).toEqual(
-      expect.arrayContaining(["Observation", "Comparison", "Execution"])
+      expect.arrayContaining(["Evolution", "Comparison", "Execution"])
     );
   });
 
@@ -70,12 +70,12 @@ describe("telemetry events", () => {
           epsilon: 0,
           maxIterations: 5
         },
-        observerRef: "increment-observer",
+        evolveRef: "increment-evolver",
         verifierRef: "hitl-verifier"
       },
       {
-        observers: {
-          "increment-observer": ({ current, target }) => ({
+        evolvers: {
+          "increment-evolver": ({ current, target }) => ({
             value: Math.min(current.value + 5, target.value)
           })
         },

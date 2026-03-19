@@ -20,12 +20,12 @@ import type {
   CompiledControlSystem,
   ControlSystemConfig,
   ComparatorHandler,
+  EvolveHandler,
+  EvolveInput,
   PrecuratorTelemetryEventName,
   PrecuratorTelemetryEventPayloadMap,
   InvokeInput,
   MemoryConfig,
-  ObserverHandler,
-  ObserverInput,
   ResumeInput,
   RuntimeExecutionContext,
   RuntimeRegistry,
@@ -96,22 +96,22 @@ function createExecutionCheckpointLabel(
   return `${auditLogRef ?? "runtime-audit-default"}:iteration-${k}`;
 }
 
-function resolveObserver<TTarget, TCurrent>(
+function resolveEvolver<TTarget, TCurrent>(
   config: ControlSystemConfig<TTarget, TCurrent>,
   registry: RuntimeRegistry<TTarget, TCurrent>
-): ObserverHandler<TTarget, TCurrent> | undefined {
-  if (!config.observerRef) {
+): EvolveHandler<TTarget, TCurrent> | undefined {
+  if (!config.evolveRef) {
     return undefined;
   }
 
-  const observer = registry.observers?.[config.observerRef] as
-    | ObserverHandler<TTarget, TCurrent>
+  const evolver = registry.evolvers?.[config.evolveRef] as
+    | EvolveHandler<TTarget, TCurrent>
     | undefined;
-  if (!observer) {
-    throw new Error(`Observer "${config.observerRef}" is not registered.`);
+  if (!evolver) {
+    throw new Error(`Evolver "${config.evolveRef}" is not registered.`);
   }
 
-  return observer;
+  return evolver;
 }
 
 function resolveVerifier<TTarget, TCurrent>(
@@ -488,7 +488,7 @@ export function compileControlSystem<TTarget, TCurrent>(
   config: ControlSystemConfig<TTarget, TCurrent>,
   runtimeRegistry: RuntimeRegistry<TTarget, TCurrent> = {}
 ): CompiledControlSystem<TTarget, TCurrent> {
-  const observer = resolveObserver(config, runtimeRegistry);
+  const evolver = resolveEvolver(config, runtimeRegistry);
   const verifier = resolveVerifier(config, runtimeRegistry);
   const comparator = resolveComparator(config, runtimeRegistry);
   const memoryConfig = {
@@ -576,27 +576,27 @@ export function compileControlSystem<TTarget, TCurrent>(
   });
 
   const graph = new StateGraph(StateAnnotation)
-    .addNode("observe", async (state: ControlState<TTarget, TCurrent>) => {
-      if (!observer) {
+    .addNode("evolve", async (state: ControlState<TTarget, TCurrent>) => {
+      if (!evolver) {
         return {};
       }
 
       const executionContext = createExecutionContext(config, runtimeRegistry, state);
-      const rawObservedCurrent = await observer({
+      const evolvedCurrent = await evolver({
         target: state.control.target,
         current: state.control.current,
         worldContext: state.control.worldContext,
         ...(state.runtime.metadata ? { metadata: state.runtime.metadata } : {}),
         executionContext
-      } satisfies ObserverInput<TTarget, TCurrent>);
+      } satisfies EvolveInput<TTarget, TCurrent>);
 
-      assertJsonReadySerializable(rawObservedCurrent, "observer.current");
+      assertJsonReadySerializable(evolvedCurrent, "evolve.current");
       const threadId = readThreadId(state.runtime.metadata);
 
-      // "Тихая" деградация: если сенсор вернул данные, не проходящие схему,
+      // "Тихая" деградация: если эволвер вернул данные, не проходящие схему,
       // мы фиксируем fault и завершаем цикл, не обновляя control.current.
       if (config.schemas?.current) {
-        const parsed = config.schemas.current.safeParse(rawObservedCurrent);
+        const parsed = config.schemas.current.safeParse(evolvedCurrent);
         if (!parsed.success) {
           return {
             runtime: {
@@ -604,20 +604,20 @@ export function compileControlSystem<TTarget, TCurrent>(
               status: "failed",
               stopReason: "unrecoverable_schema_violation",
               diagnostics: {
-                code: "OBSERVATION_SCHEMA_VIOLATION",
+                code: "EVOLVE_SCHEMA_VIOLATION",
                 message: parsed.error.message,
                 evidence: {
-                  rawOutput: rawObservedCurrent
+                  rawOutput: evolvedCurrent
                 }
               }
             }
           };
         }
 
-        assertJsonReadySerializable(parsed.data, "observer.current.parsed");
+        assertJsonReadySerializable(parsed.data, "evolve.current.parsed");
 
         emitTelemetry("step:completed", {
-          control_step_type: "Observation",
+          control_step_type: "Evolution",
           error_score: state.control.errorScore,
           delta_error: state.control.deltaError,
           error_trend: state.control.errorTrend,
@@ -635,7 +635,7 @@ export function compileControlSystem<TTarget, TCurrent>(
       }
 
       emitTelemetry("step:completed", {
-        control_step_type: "Observation",
+        control_step_type: "Evolution",
         error_score: state.control.errorScore,
         delta_error: state.control.deltaError,
         error_trend: state.control.errorTrend,
@@ -647,7 +647,7 @@ export function compileControlSystem<TTarget, TCurrent>(
       return {
         control: {
           ...state.control,
-          current: rawObservedCurrent
+          current: evolvedCurrent
         }
       };
     })
@@ -906,9 +906,9 @@ export function compileControlSystem<TTarget, TCurrent>(
         }
       };
     })
-    .addEdge("__start__", "observe")
+    .addEdge("__start__", "evolve")
     .addConditionalEdges(
-      "observe",
+      "evolve",
       (state: ControlState<TTarget, TCurrent>) =>
         state.runtime.status === "optimizing" ? "compare" : END
     )
@@ -944,7 +944,7 @@ export function compileControlSystem<TTarget, TCurrent>(
       return route;
     })
     .addConditionalEdges("interrupt", (state: ControlState<TTarget, TCurrent>) =>
-      state.runtime.status === "aborted" ? END : "observe"
+      state.runtime.status === "aborted" ? END : "evolve"
     )
     .compile({
       checkpointer,

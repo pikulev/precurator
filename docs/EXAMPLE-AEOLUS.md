@@ -41,7 +41,7 @@ All fields remain JSON-serializable. Runtime instances, RNG state and report col
 
 The example intentionally does not add a new public `Predictor` node. It stays inside the current control loop:
 
-- `observerRef`
+- `evolveRef`
   - advances the plant one step forward;
   - applies the current control vector;
   - injects `noiseForce` in reality mode;
@@ -56,7 +56,7 @@ The example intentionally does not add a new public `Predictor` node. It stays i
 - telemetry hooks
   - `step:completed` and `step:interrupted` are used to assemble the dashboard dataset outside prompt-facing state.
 
-This keeps the example aligned with `observe -> compare -> verify -> compactMemory` and preserves the `control` / `runtime` split.
+This keeps the example aligned with `evolve -> compare -> verify -> compactMemory` and preserves the `control` / `runtime` split. The rename matters because this step is not passive observation only; it advances the plant and returns the next state.
 
 ## Simulation vs Reality
 
@@ -68,7 +68,7 @@ The example always runs two branches from the same initial condition:
    - the resulting path becomes the dotted preview trajectory in the dashboard.
 2. reality
    - the same control logic runs again;
-   - the observer samples disturbance in `[-5, +5]` per axis;
+   - the evolver samples disturbance in `[-5, +5]` per axis;
    - the controller remains intentionally conservative so the trajectory unfolds over roughly `20-30` steps instead of snapping to the target in a handful of moves;
    - the dashboard renders the drift between predicted and actual motion.
 

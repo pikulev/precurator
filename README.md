@@ -52,7 +52,7 @@ This is control-inspired infrastructure for AI agents, not a classical control-a
 The entrypoint is `compileControlSystem(config, runtimeRegistry)`.
 
 - `config` describes what the system is in a JSON-ready form.
-- `runtimeRegistry` provides what the system needs at runtime: observers, comparators, verifiers, tools, models, summarizers, and a checkpointer.
+- `runtimeRegistry` provides what the system needs at runtime: evolvers, comparators, verifiers, tools, models, summarizers, and a checkpointer.
 - the compiled result is still a LangGraph runtime, but with a more explicit contract for state, lifecycle, and safety.
 
 ```mermaid
@@ -75,7 +75,7 @@ Two ideas matter more than anything else.
 
 ### 1. Config Stays Serializable
 
-`ControlSystemConfig` stores references such as `observerRef`, `verifierRef`, `comparatorRef`, `toolRefs`, and `modelRef`.
+`ControlSystemConfig` stores references such as `evolveRef`, `verifierRef`, `comparatorRef`, `toolRefs`, and `modelRef`.
 
 Those are not "magic strings". They are stable keys into the `RuntimeRegistry`. The goal is to keep config and checkpointed state JSON-ready while still binding real handlers, SDK clients, models, and tools in the current process.
 
@@ -94,12 +94,13 @@ This makes a long-running run much easier to inspect. `runtime` tells you how th
 
 The public loop is easiest to think about as:
 
-`observe -> compare -> verify -> compactMemory`
+`evolve -> compare -> verify -> compactMemory`
 
 That framing matters for two reasons:
 
 - there is no hidden planner node doing secret orchestration behind the scenes;
-- if your domain has richer planning or effect execution, you model it explicitly through your observer, comparator, verifier, and runtime tools.
+- the name `evolve` is intentional: the public step may read, act, and then return the next `current`;
+- if your domain has richer planning or effect execution, you model it explicitly through your evolver, comparator, verifier, and runtime tools.
 
 That usually means `precurator` becomes the control shell around an existing LangGraph application, harness, or domain-specific runtime, not a replacement for every piece of reasoning you already have.
 
@@ -126,12 +127,12 @@ const system = compileControlSystem(
       compactionStrategy: "summarize-oldest",
       summaryReplacementSemantics: "replace-compacted-steps"
     },
-    observerRef: "increment-observer",
+    evolveRef: "increment-evolver",
     verifierRef: "pause-once-verifier"
   },
   {
-    observers: {
-      "increment-observer": ({ current, target }) => ({
+    evolvers: {
+      "increment-evolver": ({ current, target }) => ({
         value: Math.min(current.value + 2, target.value)
       })
     },
@@ -176,13 +177,13 @@ const snapshot =
 
 The example keeps a few shortcuts intentionally visible:
 
-- `"increment-observer"` is just a registry key. The config stores a reference, and the runtime registry maps it to a real handler.
-- the observer increments by `2` because the example wants deterministic motion that is easy to read at a glance.
+- `"increment-evolver"` is just a registry key. The config stores a reference, and the runtime registry maps it to a real handler.
+- the evolver increments by `2` because the example wants deterministic motion that is easy to read at a glance.
 - `epsilon: 0.05` and `maxIterations: 3` are not tuned for optimal behavior. They keep the example short while still showing how stop-policy wiring works.
 - `"pause-once-verifier"` is a verifier whose only job is to pause the loop once through a checkpoint so that `awaiting_human_intervention`, `resume()`, and `humanDecision` all show up in a minimal example.
 - `current.value === 4 && history.length === 1` is not a control heuristic. It means "pause after the first completed step, once".
 - `thread_id: "hello-world"` gives the run a stable LangGraph thread identity so checkpoints and later state lookups stay attached to the same thread.
-- `resume(..., { current: { value: 5 } })` demonstrates operator-provided state correction. It is there to show the intervention API, not to suggest that manual overrides should replace ordinary observation.
+- `resume(..., { current: { value: 5 } })` demonstrates operator-provided state correction. It is there to show the intervention API, not to suggest that manual overrides should replace ordinary state evolution.
 
 Even this tiny example already shows the library's basic shape:
 
@@ -265,14 +266,14 @@ The most common integration path is not "replace everything with `precurator`". 
 
 1. keep your domain model and LangGraph application logic;
 2. encode the control loop contract in `ControlSystemConfig`;
-3. bind actual observers, verifiers, tools, models, and checkpointer in `RuntimeRegistry`;
+3. bind actual evolvers, verifiers, tools, models, and checkpointer in `RuntimeRegistry`;
 4. let `precurator` own the lifecycle invariants: bounded memory, stop policy, simulation safety, checkpoint-aware pauses, and structured diagnostics.
 
 That usually means:
 
 - SDK clients, database handles, and provider instances live in registries, not in config or state;
 - your domain-specific observation or actuation logic can stay inside handlers you already understand;
-- existing harness code can often sit behind `observerRef`, `toolRefs`, or `verifierRef`;
+- existing harness code can often sit behind `evolveRef`, `toolRefs`, or `verifierRef`;
 - thread and checkpoint management become explicit runtime concerns instead of incidental helper code.
 
 If you are already using LangGraph, `precurator` is best seen as a layer that brings more structure to stateful, long-horizon agent loops.
@@ -330,14 +331,14 @@ Describes the loop in a JSON-ready form.
 - `stopPolicy`: `{ epsilon, maxIterations, maxTokenBudget? }`
 - `memory?`: bounded-memory behavior
 - `mode?`: `"conservative" | "balanced" | "aggressive"`
-- `modelRef?`, `observerRef?`, `verifierRef?`, `comparatorRef?`, `toolRefs?`
+- `modelRef?`, `evolveRef?`, `verifierRef?`, `comparatorRef?`, `toolRefs?`
 
 ### `RuntimeRegistry<TTarget, TCurrent>`
 
 Resolves config references into executable runtime behavior.
 
 - `models?`
-- `observers?`
+- `evolvers?`
 - `verifiers?`
 - `comparators?`
 - `tools?`

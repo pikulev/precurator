@@ -18,12 +18,12 @@ async function main(): Promise<void> {
         compactionStrategy: "summarize-oldest",
         summaryReplacementSemantics: "replace-compacted-steps"
       },
-      observerRef: "increment-observer",
+      evolveRef: "increment-evolver",
       verifierRef: "pause-once-verifier"
     },
     {
-      observers: {
-        "increment-observer": ({ current, target }) => ({
+      evolvers: {
+        "increment-evolver": ({ current, target }) => ({
           value: Math.min(current.value + 2, target.value)
         })
       },

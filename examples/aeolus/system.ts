@@ -82,7 +82,7 @@ export function createAeolusSystemEnvironment(): {
 } {
   const collector = new AeolusReportCollector();
   const rngByThread = new Map<string, () => number>();
-  const observationCountByThread = new Map<string, number>();
+  const evolutionCountByThread = new Map<string, number>();
   const compactedCountByThread = new Map<string, number>();
 
   const system = compileControlSystem<AeolusTarget, AeolusCurrent>(
@@ -101,15 +101,15 @@ export function createAeolusSystemEnvironment(): {
         summaryReplacementSemantics: "replace-compacted-steps"
       },
       mode: "conservative",
-      observerRef: "aeolus-observer",
+      evolveRef: "aeolus-evolver",
       comparatorRef: "aeolus-comparator",
       verifierRef: "aeolus-verifier"
     },
     {
-      observers: {
-        "aeolus-observer": ({ current, target, worldContext, metadata, executionContext }) => {
+      evolvers: {
+        "aeolus-evolver": ({ current, target, worldContext, metadata, executionContext }) => {
           const threadId = readThreadId(metadata);
-          const stepIndex = observationCountByThread.get(threadId) ?? 0;
+          const stepIndex = evolutionCountByThread.get(threadId) ?? 0;
           const rng = resolveThreadRng(
             rngByThread,
             threadId,
@@ -125,13 +125,13 @@ export function createAeolusSystemEnvironment(): {
             ...(forcedNoise ? { noiseForce: forcedNoise } : {})
           });
 
-          collector.recordObservation({
+          collector.recordEvolution({
             threadId,
             k: stepIndex,
             simulation: executionContext.simulation,
             current: nextCurrent
           });
-          observationCountByThread.set(threadId, stepIndex + 1);
+          evolutionCountByThread.set(threadId, stepIndex + 1);
 
           return nextCurrent;
         }

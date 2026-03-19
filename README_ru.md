@@ -52,7 +52,7 @@ LangGraph достаточно гибок, чтобы собрать все эт
 Точка входа — `compileControlSystem(config, runtimeRegistry)`.
 
 - `config` описывает, что именно представляет собой система, в JSON-ready виде.
-- `runtimeRegistry` содержит все, что нужно на этапе выполнения: observers, comparators, verifiers, tools, models, summarizers и checkpointer.
+- `runtimeRegistry` содержит все, что нужно на этапе выполнения: evolvers, comparators, verifiers, tools, models, summarizers и checkpointer.
 - результат компиляции по-прежнему остается рантаймом LangGraph, но уже с более явным контрактом на состояние, lifecycle и безопасность.
 
 ```mermaid
@@ -75,7 +75,7 @@ flowchart LR
 
 ### 1. Конфиг остается сериализуемым
 
-`ControlSystemConfig` хранит ссылки вроде `observerRef`, `verifierRef`, `comparatorRef`, `toolRefs` и `modelRef`.
+`ControlSystemConfig` хранит ссылки вроде `evolveRef`, `verifierRef`, `comparatorRef`, `toolRefs` и `modelRef`.
 
 Это не "магические строки", а устойчивые ключи в `RuntimeRegistry`. Смысл в том, чтобы config и checkpointed state оставались JSON-ready, а реальные handlers, SDK clients, models и tools подключались уже в текущем процессе.
 
@@ -94,10 +94,11 @@ flowchart LR
 
 Публичный цикл проще всего понимать так:
 
-`observe -> compare -> verify -> compactMemory`
+`evolve -> compare -> verify -> compactMemory`
 
 - внутри нет скрытого planner node с "секретной" оркестрацией;
-- если в вашем домене есть более богатое планирование или исполнение эффектов, вы моделируете это явно через observer, comparator, verifier и runtime tools.
+- `evolve`: этот публичный шаг может читать, воздействовать и затем возвращать следующий `current`-стейт;
+- если в вашем домене есть более богатое планирование или исполнение эффектов, вы моделируете это явно через evolver, comparator, verifier и runtime tools.
 
 ## Быстрый старт
 
@@ -122,12 +123,12 @@ const system = compileControlSystem(
       compactionStrategy: "summarize-oldest",
       summaryReplacementSemantics: "replace-compacted-steps"
     },
-    observerRef: "increment-observer",
+    evolveRef: "increment-evolver",
     verifierRef: "pause-once-verifier"
   },
   {
-    observers: {
-      "increment-observer": ({ current, target }) => ({
+    evolvers: {
+      "increment-evolver": ({ current, target }) => ({
         value: Math.min(current.value + 2, target.value)
       })
     },
@@ -172,13 +173,13 @@ const snapshot =
 
 В примере есть несколько специально оставленных упрощений:
 
-- `"increment-observer"` — это просто ключ в registry. Конфиг хранит ссылку, а runtime registry сопоставляет ее с реальным handler.
-- observer увеличивает значение на `2`, чтобы движение было детерминированным и понятным с первого взгляда.
+- `"increment-evolver"` — это просто ключ в registry. Конфиг хранит ссылку, а runtime registry сопоставляет ее с реальным handler.
+- evolver увеличивает значение на `2`, чтобы движение было детерминированным и понятным с первого взгляда.
 - `epsilon: 0.05` и `maxIterations: 3` выбраны не ради оптимального поведения. Они нужны, чтобы пример оставался коротким, но все равно показывал, как подключается stop policy.
 - `"pause-once-verifier"` — verifier, чья единственная задача один раз поставить цикл на паузу через checkpoint, чтобы в минимальном примере появились `awaiting_human_intervention`, `resume()` и `humanDecision`.
 - `current.value === 4 && history.length === 1` — не эвристика управления, а просто правило: "поставь паузу один раз после первого завершенного шага".
 - `thread_id: "hello-world"` дает запуску устойчивый идентификатор thread'а в LangGraph, чтобы checkpoint'ы и последующие чтения состояния оставались привязаны к одному и тому же thread'у.
-- `resume(..., { current: { value: 5 } })` показывает, как оператор может вручную скорректировать состояние. Это демонстрация API для вмешательства, а не рекомендация подменять observation ручными правками.
+- `resume(..., { current: { value: 5 } })` показывает, как оператор может вручную скорректировать состояние. Это демонстрация API для вмешательства, а не рекомендация подменять обычную эволюцию состояния ручными правками.
 
 Даже в таком маленьком примере уже видна базовая форма библиотеки:
 
@@ -261,14 +262,14 @@ Payload'ы включают такие поля, как `error_score`, `delta_er
 
 1. сохранить вашу доменную модель и логику LangGraph-приложения;
 2. описать контракт control loop'а через `ControlSystemConfig`;
-3. привязать реальные observers, verifiers, tools, models и checkpointer в `RuntimeRegistry`;
+3. привязать реальные evolvers, verifiers, tools, models и checkpointer в `RuntimeRegistry`;
 4. отдать `precurator` lifecycle-инварианты: bounded memory, stop policy, безопасность `simulation`, checkpoint-aware паузы и структурированные diagnostics.
 
 На практике это обычно означает следующее:
 
 - SDK clients, database handles и provider instances живут в registry, а не в config или state;
 - domain-specific логика observation или actuation может остаться внутри handlers, которые вам уже понятны;
-- существующий harness-код часто можно спрятать за `observerRef`, `toolRefs` или `verifierRef`;
+- существующий harness-код часто можно спрятать за `evolveRef`, `toolRefs` или `verifierRef`;
 - управление thread'ами и checkpoint'ами становится явной задачей рантайма, а не набором случайных helper'ов.
 
 Если вы уже используете LangGraph, удобнее всего воспринимать `precurator` как слой, который наводит порядок в stateful agent loop'ах с длинным горизонтом.
@@ -326,14 +327,14 @@ Payload'ы включают такие поля, как `error_score`, `delta_er
 - `stopPolicy`: `{ epsilon, maxIterations, maxTokenBudget? }`
 - `memory?`: поведение bounded memory
 - `mode?`: `"conservative" | "balanced" | "aggressive"`
-- `modelRef?`, `observerRef?`, `verifierRef?`, `comparatorRef?`, `toolRefs?`
+- `modelRef?`, `evolveRef?`, `verifierRef?`, `comparatorRef?`, `toolRefs?`
 
 ### `RuntimeRegistry<TTarget, TCurrent>`
 
 Разрешает ссылки из config в исполняемое поведение рантайма.
 
 - `models?`
-- `observers?`
+- `evolvers?`
 - `verifiers?`
 - `comparators?`
 - `tools?`

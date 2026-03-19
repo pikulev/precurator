@@ -12,7 +12,7 @@ import {
 import { toBeSerializable } from "../helpers/assertions";
 
 describe("compileControlSystem", () => {
-  it("iterates with an observer until epsilon is reached", async () => {
+  it("iterates with an evolver until epsilon is reached", async () => {
     const system = compileControlSystem({
       schemas: {
         target: z.object({ value: z.number() }),
@@ -22,10 +22,10 @@ describe("compileControlSystem", () => {
         epsilon: 0,
         maxIterations: 5
       },
-      observerRef: "increment-observer"
+      evolveRef: "increment-evolver"
     }, {
-      observers: {
-        "increment-observer": ({ current, target }) => ({
+      evolvers: {
+        "increment-evolver": ({ current, target }) => ({
           value: Math.min(current.value + 4, target.value)
         })
       }
@@ -74,11 +74,11 @@ describe("compileControlSystem", () => {
         epsilon: 0,
         maxIterations: 35
       },
-      observerRef: "long-horizon-observer",
+      evolveRef: "long-horizon-evolver",
       comparatorRef: "long-horizon-comparator"
     }, {
-      observers: {
-        "long-horizon-observer": ({ current }) => ({
+      evolvers: {
+        "long-horizon-evolver": ({ current }) => ({
           iteration: current.iteration + 1,
           errorScore: Number(Math.max(0, 1 - (current.iteration + 1) / 30).toFixed(6))
         })
@@ -138,11 +138,11 @@ describe("compileControlSystem", () => {
         epsilon: 0,
         maxIterations: 4
       },
-      observerRef: "increment-observer",
+      evolveRef: "increment-evolver",
       verifierRef: "transient-diagnostics-verifier"
     }, {
-      observers: {
-        "increment-observer": ({ current, target }) => ({
+      evolvers: {
+        "increment-evolver": ({ current, target }) => ({
           value: Math.min(current.value + 1, target.value)
         })
       },
@@ -184,7 +184,7 @@ describe("compileControlSystem", () => {
     ).rejects.toBeInstanceOf(PrecuratorValidationError);
   });
 
-  it("marks observer schema violations as failed without throwing", async () => {
+  it("marks evolver schema violations as failed without throwing", async () => {
     const validCurrent = { value: 1 };
 
     const system = compileControlSystem({
@@ -196,11 +196,11 @@ describe("compileControlSystem", () => {
         epsilon: 0,
         maxIterations: 3
       },
-      observerRef: "bad-observer"
+      evolveRef: "bad-evolver"
     }, {
-      observers: {
+      evolvers: {
         // Intentionally returns invalid shape to assert runtime schema violation behavior.
-        "bad-observer": () => ({
+        "bad-evolver": () => ({
           value: "not-a-number",
           leaked: { reason: "sensor-broke" }
         }) as any
@@ -215,7 +215,7 @@ describe("compileControlSystem", () => {
     expect(snapshot.runtime.status).toBe("failed");
     expect(snapshot.runtime.stopReason).toBe("unrecoverable_schema_violation");
     expect(snapshot.runtime.diagnostics?.code).toBe(
-      "OBSERVATION_SCHEMA_VIOLATION"
+      "EVOLVE_SCHEMA_VIOLATION"
     );
     expect(snapshot.runtime.diagnostics?.evidence).toMatchObject({
       rawOutput: {
@@ -226,7 +226,7 @@ describe("compileControlSystem", () => {
     expect(snapshot.control.current).toEqual(validCurrent);
   });
 
-  it("strips unknown keys from observer output based on schemas.current", async () => {
+  it("strips unknown keys from evolver output based on schemas.current", async () => {
     const system = compileControlSystem({
       schemas: {
         target: z.object({ value: z.number() }),
@@ -236,10 +236,10 @@ describe("compileControlSystem", () => {
         epsilon: 0,
         maxIterations: 1
       },
-      observerRef: "strip-observer"
+      evolveRef: "strip-evolver"
     }, {
-      observers: {
-        "strip-observer": () => ({
+      evolvers: {
+        "strip-evolver": () => ({
           value: 1,
           extra: "should-not-leak"
         })
@@ -256,7 +256,7 @@ describe("compileControlSystem", () => {
     expect((snapshot.control.current as any).extra).toBeUndefined();
   });
 
-  it("throws NonSerializableDataError when observer returns non-serializable current", async () => {
+  it("throws NonSerializableDataError when evolver returns non-serializable current", async () => {
     const system = compileControlSystem({
       schemas: {
         target: z.object({ value: z.number() }),
@@ -266,10 +266,10 @@ describe("compileControlSystem", () => {
         epsilon: 0,
         maxIterations: 1
       },
-      observerRef: "non-serializable-observer"
+      evolveRef: "non-serializable-evolver"
     }, {
-      observers: {
-        "non-serializable-observer": () => ({
+      evolvers: {
+        "non-serializable-evolver": () => ({
           value: new Date()
         } as any)
       }
@@ -294,11 +294,11 @@ describe("compileControlSystem", () => {
         epsilon: 0.05,
         maxIterations: 5
       },
-      observerRef: "oscillating-observer",
+      evolveRef: "oscillating-evolver",
       comparatorRef: "oscillating-comparator"
     }, {
-      observers: {
-        "oscillating-observer": ({ current }) => {
+      evolvers: {
+        "oscillating-evolver": ({ current }) => {
           const nextErrorScore = sequence[index] ?? current.errorScore;
           index += 1;
           return {
@@ -361,14 +361,14 @@ describe("compileControlSystem", () => {
         maxIterations: 3
       },
       modelRef: "primary-model",
-      observerRef: "read-observer",
+      evolveRef: "read-evolver",
       verifierRef: "audit-verifier",
       toolRefs: ["audit-tool"]
     };
     const serializableConfig = {
       stopPolicy: config.stopPolicy,
       modelRef: config.modelRef,
-      observerRef: config.observerRef,
+      evolveRef: config.evolveRef,
       verifierRef: config.verifierRef,
       toolRefs: config.toolRefs
     };
@@ -376,8 +376,8 @@ describe("compileControlSystem", () => {
       models: {
         "primary-model": modelInstance
       },
-      observers: {
-        "read-observer": ({ current }) => current
+      evolvers: {
+        "read-evolver": ({ current }) => current
       },
       verifiers: {
         "audit-verifier": verifierSpy
@@ -403,7 +403,7 @@ describe("compileControlSystem", () => {
         maxIterations: 3
       },
       modelRef: "primary-model",
-      observerRef: "read-observer",
+      evolveRef: "read-evolver",
       verifierRef: "audit-verifier",
       toolRefs: ["audit-tool"]
     });
@@ -435,10 +435,10 @@ describe("compileControlSystem", () => {
         compactionStrategy: "summarize-oldest",
         summaryReplacementSemantics: "replace-compacted-steps"
       },
-      observerRef: "increment-observer"
+      evolveRef: "increment-evolver"
     }, {
-      observers: {
-        "increment-observer": ({ current, target }) => ({
+      evolvers: {
+        "increment-evolver": ({ current, target }) => ({
           value: Math.min(current.value + 1, target.value)
         })
       },
@@ -486,11 +486,11 @@ describe("compileControlSystem", () => {
         epsilon: 0,
         maxIterations: 2
       },
-      observerRef: "tool-observer",
+      evolveRef: "tool-evolver",
       toolRefs: ["destroy-world"]
     }, {
-      observers: {
-        "tool-observer": async ({ current, executionContext }) => {
+      evolvers: {
+        "tool-evolver": async ({ current, executionContext }) => {
           observedSimulationFlag = executionContext.simulation;
           await executionContext.invokeTool("destroy-world", {
             id: "prod-cluster"
@@ -536,12 +536,12 @@ describe("compileControlSystem", () => {
         epsilon: 0,
         maxIterations: 5
       },
-      observerRef: "increment-observer",
+      evolveRef: "increment-evolver",
       verifierRef: "hitl-verifier"
     }, {
       checkpointer,
-      observers: {
-        "increment-observer": ({ current, target }) => ({
+      evolvers: {
+        "increment-evolver": ({ current, target }) => ({
           value: Math.min(current.value + 5, target.value)
         })
       },
@@ -620,10 +620,10 @@ describe("compileControlSystem", () => {
         maxIterations: 5,
         maxTokenBudget: 5
       },
-      observerRef: "increment-observer"
+      evolveRef: "increment-evolver"
     }, {
-      observers: {
-        "increment-observer": ({ current, target }) => ({
+      evolvers: {
+        "increment-evolver": ({ current, target }) => ({
           value: Math.min(current.value + 1, target.value)
         })
       },
@@ -664,10 +664,10 @@ describe("compileControlSystem", () => {
         maxIterations: 5,
         maxTokenBudget: 6
       },
-      observerRef: "increment-observer"
+      evolveRef: "increment-evolver"
     }, {
-      observers: {
-        "increment-observer": ({ current, target }) => ({
+      evolvers: {
+        "increment-evolver": ({ current, target }) => ({
           value: Math.min(current.value + 1, target.value)
         })
       },
@@ -710,11 +710,11 @@ describe("compileControlSystem", () => {
         maxIterations: 5,
         maxTokenBudget: 5
       },
-      observerRef: "increment-observer",
+      evolveRef: "increment-evolver",
       verifierRef: "hitl-verifier"
     }, {
-      observers: {
-        "increment-observer": ({ current, target }) => ({
+      evolvers: {
+        "increment-evolver": ({ current, target }) => ({
           value: Math.min(current.value + 1, target.value)
         })
       },
