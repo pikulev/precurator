@@ -1,5 +1,7 @@
 # `precurator`
 
+Language: English | [Русский](README_ru.md) | [中文](README_ch.md)
+
 `precurator` is a TypeScript library for building checkpoint-aware control loops for AI systems on top of LangGraph.
 
 It is meant for systems that stop being simple after the first successful run. Once "build a graph and call it" is no longer enough, you usually need a few more things at once: structured error signals, bounded prompt memory, pause and resume semantics, simulation branches, and a state model you can inspect without digging through opaque chain internals.
@@ -293,6 +295,8 @@ Use it to understand the API, not as the final shape of a production agent.
 
 `Aeolus` is the more substantial example. It is useful when you want to look at a longer-running scenario with preview mode, external disturbance, and telemetry instead of a toy counter.
 
+Live demo: [pikulev.github.io/precurator](https://pikulev.github.io/precurator/)
+
 It demonstrates:
 
 - `simulation: true` as a preview branch with disturbance disabled;
@@ -311,6 +315,8 @@ It also makes it clearer where the domain logic actually lives.
 If `hello-world` explains the API, `Aeolus` shows what the same approach looks like in a more realistic scenario.
 
 For a deeper walkthrough, see `docs/EXAMPLE-AEOLUS.md`.
+
+Generate the report locally with `bun run demo:aeolus`. Build the GitHub Pages bundle with `bun run build:pages`.
 
 ## Compact Contract Overview
 
@@ -381,6 +387,7 @@ These helpers are useful when you want to test convergence and verifier behavior
 ```bash
 bun install
 bun run verify
+bun run demo:aeolus
 ```
 
 ## Repository Layout

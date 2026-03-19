@@ -126,10 +126,18 @@ The HTML report is self-contained and uses only embedded CSS, SVG and vanilla Ja
 From the repository root:
 
 ```bash
-bun examples/aeolus/index.ts
+bun run demo:aeolus
 ```
 
 The command prints a small JSON summary with the final statuses and the artifact paths.
+
+To build the GitHub Pages artifact bundle:
+
+```bash
+bun run build:pages
+```
+
+This writes a Pages-ready site to `out/aeolus-pages/` with `index.html`, `aeolus-report.json`, and `.nojekyll`.
 
 ## Implementation Notes
 

@@ -1,5 +1,7 @@
 # `precurator`
 
+[English](README.md) | [Русский](README_ru.md) | 中文
+
 `precurator` 是一个 TypeScript 库，用于在 LangGraph 之上为 AI 系统构建具备 checkpoint 感知能力的控制循环。
 
 它面向那些在第一个成功场景之后就不再简单的系统。等到“把图搭起来再调用一下”已经不够用时，通常还会同时冒出几件事：结构化错误信号、有限的 prompt 内存、暂停与恢复语义、simulation 分支，以及一个不用去倒推黑盒链式内部实现也能看懂的状态模型。
@@ -295,6 +297,8 @@ payload 中包含诸如 `error_score`、`delta_error`、`error_trend`、`simulat
 
 `Aeolus` 是更完整的示例。如果你想看的不是玩具计数器，而是一个带 preview、外部扰动和 telemetry 的长流程场景，它会更有参考价值。
 
+在线演示: [pikulev.github.io/precurator](https://pikulev.github.io/precurator/)
+
 它展示了：
 
 - `simulation: true` 作为关闭扰动的预览分支；
@@ -313,6 +317,8 @@ payload 中包含诸如 `error_score`、`delta_error`、`error_trend`、`simulat
 如果说 `hello-world` 主要是帮助你快速看懂 API，那么 `Aeolus` 展示的就是同一套思路放到更真实场景里会是什么样子。
 
 如需更深入的讲解，请参见 `docs/EXAMPLE-AEOLUS.md`。
+
+本地生成报告可运行 `bun run demo:aeolus`。构建 GitHub Pages 产物可运行 `bun run build:pages`。
 
 ## 精简契约总览
 
@@ -383,6 +389,7 @@ const trend = deriveErrorTrend([0.5, 0.3, 0.4]);
 ```bash
 bun install
 bun run verify
+bun run demo:aeolus
 ```
 
 ## 仓库结构

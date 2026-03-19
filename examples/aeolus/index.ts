@@ -1,20 +1,13 @@
-import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { renderAeolusDashboard } from "./report-template";
-import { runAeolusDemo } from "./system";
+import { writeAeolusArtifacts } from "./artifacts";
 
 async function main(): Promise<void> {
-  const result = await runAeolusDemo();
   const directory = dirname(fileURLToPath(import.meta.url));
-  const outDirectory = join(directory, "out");
-  const htmlPath = join(outDirectory, "aeolus-dashboard.html");
-  const jsonPath = join(outDirectory, "aeolus-report.json");
-
-  await mkdir(outDirectory, { recursive: true });
-  await writeFile(jsonPath, JSON.stringify(result.report, null, 2), "utf8");
-  await writeFile(htmlPath, renderAeolusDashboard(result.report), "utf8");
+  const { result, paths } = await writeAeolusArtifacts({
+    outDirectory: join(directory, "out")
+  });
 
   console.log(
     JSON.stringify(
@@ -31,8 +24,8 @@ async function main(): Promise<void> {
           steps: result.runs.reality.steps.length
         },
         artifacts: {
-          html: htmlPath,
-          json: jsonPath
+          html: paths.html,
+          json: paths.json
         }
       },
       null,
