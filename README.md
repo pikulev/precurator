@@ -96,11 +96,15 @@ The public loop is easiest to think about as:
 
 `evolve -> compare -> verify -> compactMemory`
 
-That framing matters for two reasons:
+- `evolve` updates `current`. In some domains it only reads the environment; in others it legitimately folds effect + observe together by calling tools, advancing the system, and returning the next `current`.
+- `compare` computes the structured gap between `target` and the updated `current`: `errorVector`, `errorScore`, `deltaError`, `errorTrend`, and optional `prediction`.
+- `verify` independently decides whether progress should count. This is the step that keeps the loop in `optimizing`, marks it as converged, fails it, or escalates to `awaiting_human_intervention`.
+- `compactMemory` shrinks prompt-facing memory before the next iteration so reasoning sees a bounded, normalized window instead of an ever-growing transcript.
+
+Two consequences matter:
 
 - there is no hidden planner node doing secret orchestration behind the scenes;
-- the name `evolve` is intentional: the public step may read, act, and then return the next `current`;
-- if your domain has richer planning or effect execution, you model it explicitly through your evolver, comparator, verifier, and runtime tools.
+- if your domain needs richer planning, tool execution, or effector logic, you model that explicitly inside `evolve`, `verifier`, and runtime tools rather than expecting a hidden orchestration layer.
 
 That usually means `precurator` becomes the control shell around an existing LangGraph application, harness, or domain-specific runtime, not a replacement for every piece of reasoning you already have.
 
